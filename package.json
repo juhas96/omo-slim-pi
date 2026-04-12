@@ -1,6 +1,6 @@
 {
   "name": "oh-my-opencode-pi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pantheon-style multi-agent orchestration for pi, inspired by oh-my-opencode-slim",
   "type": "module",
   "license": "MIT",
@@ -37,9 +37,15 @@
     "access": "public"
   },
   "pi": {
-    "extensions": ["./extensions/oh-my-opencode-pi"],
-    "prompts": ["./prompts"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./extensions/oh-my-opencode-pi"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",
