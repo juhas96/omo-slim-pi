@@ -1,5 +1,7 @@
 node_modules
 *.tsbuildinfo
+.oh-my-opencode-pi-debug/
+.oh-my-opencode-pi-workflow.json
 
 # Beads / Dolt files (added by bd init)
 .dolt/

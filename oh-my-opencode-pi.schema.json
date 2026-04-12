@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/oh-my-opencode-pi.schema.json",
+  "title": "oh-my-opencode-pi config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "preset": {
+      "type": "string",
+      "description": "Apply a named top-level config preset before local overrides."
+    },
+    "extends": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Apply multiple named top-level config presets in order before local overrides."
+    },
+    "presets": {
+      "type": "object",
+      "description": "User-defined top-level config presets. Presets may contain partial config objects and can themselves use preset/extends.",
+      "additionalProperties": {
+        "type": "object"
+      },
+      "default": {
+        "default": {},
+        "fast": {
+          "council": { "defaultPreset": "quick" },
+          "research": { "maxResults": 3 },
+          "background": { "maxConcurrent": 1 }
+        },
+        "research": {
+          "council": { "defaultPreset": "balanced" },
+          "research": { "maxResults": 8 }
+        },
+        "durable": {
+          "fallback": { "retryOnEmpty": true, "retryDelayMs": 750 },
+          "debug": { "enabled": true }
+        }
+      }
+    },
+    "appendOrchestratorPrompt": {
+      "type": "boolean",
+      "default": true,
+      "description": "Append the Pantheon orchestrator prompt to top-level pi sessions."
+    },
+    "agents": {
+      "type": "object",
+      "description": "Per-agent overrides for model, CLI options, tools, and prompt files.",
+      "additionalProperties": {
+        "$ref": "#/$defs/agentOverride"
+      }
+    },
+    "council": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultPreset": {
+          "type": "string",
+          "default": "default"
+        },
+        "masterTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "description": "Council master synthesis timeout in milliseconds."
+        },
+        "councillorsTimeoutMs": {
+          "type": "number",
+          "default": 180000,
+          "description": "Per-councillor timeout in milliseconds."
+        },
+        "presets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/councilPreset"
+          }
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": {
+          "type": "number",
+          "default": 15000,
+          "description": "Per-attempt failover timeout for detached/background-style runs."
+        },
+        "delegateTimeoutMs": {
+          "type": "number",
+          "default": 0,
+          "description": "Optional hard timeout for foreground pantheon_delegate attempts. 0 disables a hard cap."
+        },
+        "retryDelayMs": {
+          "type": "number",
+          "default": 500,
+          "description": "Delay between fallback attempts in milliseconds."
+        },
+        "retryOnEmpty": {
+          "type": "boolean",
+          "default": true,
+          "description": "Treat silent empty model responses as failures and continue the fallback chain."
+        },
+        "agentTimeouts": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "default": {}
+        },
+        "councilMaster": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "agentChains": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "default": {}
+        }
+      }
+    },
+    "background": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "pollIntervalMs": { "type": "number", "default": 3000 },
+        "logDir": { "type": "string" },
+        "maxConcurrent": { "type": "number", "default": 2 }
+      }
+    },
+    "multiplexer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tmux": { "type": "boolean", "default": false },
+        "splitDirection": {
+          "type": "string",
+          "enum": ["vertical", "horizontal"],
+          "default": "vertical"
+        },
+        "layout": {
+          "type": "string",
+          "enum": ["tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical"],
+          "default": "main-vertical"
+        },
+        "focusOnSpawn": { "type": "boolean", "default": false },
+        "keepPaneOnFinish": { "type": "boolean", "default": false }
+      }
+    },
+    "research": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": { "type": "number", "default": 15000 },
+        "userAgent": { "type": "string", "default": "oh-my-opencode-pi/0.1.0" },
+        "maxResults": { "type": "number", "default": 5 },
+        "githubToken": { "type": "string" },
+        "defaultDocsSite": { "type": "string" }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "setupHints": { "type": "boolean", "default": true },
+        "defaultAllow": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "defaultDeny": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "cartography": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "maxFiles": { "type": "number", "default": 250 },
+            "maxDepth": { "type": "number", "default": 4 },
+            "maxPerDirectory": { "type": "number", "default": 8 },
+            "exclude": { "type": "array", "items": { "type": "string" }, "default": [] }
+          }
+        }
+      }
+    },
+    "adapters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disableAll": { "type": "boolean", "default": false },
+        "disabled": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "defaultAllow": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "defaultDeny": { "type": "array", "items": { "type": "string" }, "default": [] }
+      }
+    },
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDepth": { "type": "number", "default": 3 }
+      }
+    },
+    "autoContinue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "cooldownMs": { "type": "number", "default": 3000 },
+        "maxContinuations": { "type": "number", "default": 5 },
+        "autoEnable": { "type": "boolean", "default": false },
+        "autoEnableThreshold": { "type": "number", "default": 4 }
+      }
+    },
+    "interview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "templateTitle": { "type": "string", "default": "Project Specification" }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "injectHints": { "type": "boolean", "default": true },
+        "backgroundAwareness": { "type": "boolean", "default": true },
+        "todoThreshold": { "type": "number", "default": 3 },
+        "persistTodos": { "type": "boolean", "default": true },
+        "stateFile": { "type": "string", "default": ".oh-my-opencode-pi-workflow.json" },
+        "phaseReminders": { "type": "boolean", "default": true },
+        "postFileToolNudges": { "type": "boolean", "default": true },
+        "delegateRetryGuidance": { "type": "boolean", "default": true }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dashboardWidget": { "type": "boolean", "default": true },
+        "maxTodos": { "type": "number", "default": 3 },
+        "maxBackgroundTasks": { "type": "number", "default": 3 }
+      }
+    },
+    "debug": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "logDir": { "type": "string", "default": ".oh-my-opencode-pi-debug" }
+      }
+    }
+  },
+  "$defs": {
+    "agentOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string" },
+        "variant": { "type": "string", "description": "Optional model suffix such as low/medium/high reasoning." },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional raw pi CLI options appended for this agent."
+        },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "noTools": { "type": "boolean" },
+        "promptOverrideFile": { "type": "string" },
+        "promptAppendFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "promptAppendText": { "type": "string" },
+        "allowSkills": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "denySkills": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "allowedAdapters": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deniedAdapters": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "disabled": { "type": "boolean" }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "variant": { "type": "string" },
+        "prompt": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "master": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string" },
+        "variant": { "type": "string" },
+        "prompt": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "councilPreset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "master": { "$ref": "#/$defs/master" },
+        "councillors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/member" }
+        }
+      },
+      "required": ["councillors"]
+    }
+  }
+}

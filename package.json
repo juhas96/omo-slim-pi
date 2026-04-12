@@ -1,0 +1,50 @@
+{
+  "name": "oh-my-opencode-pi",
+  "version": "0.1.0",
+  "description": "Pantheon-style multi-agent orchestration for pi, inspired by oh-my-opencode-slim",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "agent",
+    "multi-agent",
+    "orchestration"
+  ],
+  "files": [
+    "agents",
+    "extensions",
+    "prompts",
+    "LICENSE",
+    "README.md",
+    "oh-my-opencode-pi.schema.json",
+    "package.json"
+  ],
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": ["./extensions/oh-my-opencode-pi"],
+    "prompts": ["./prompts"]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "dependencies": {
+    "@ast-grep/cli": "^0.42.1",
+    "jsonc-parser": "^3.3.1",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.6"
+  }
+}
