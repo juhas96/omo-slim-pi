@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "omo_slim_pi",
+  "project_id": "b0e76a48-9be2-417a-b829-e2a389f19a86"
+}
