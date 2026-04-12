@@ -165,6 +165,17 @@
         "defaultDocsSite": { "type": "string" }
       }
     },
+    "updates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "notify": { "type": "boolean", "default": true },
+        "checkIntervalHours": { "type": "number", "default": 24 },
+        "skipLocalCheckout": { "type": "boolean", "default": true },
+        "cacheFile": { "type": "string", "default": "oh-my-opencode-pi-update-check.json" }
+      }
+    },
     "skills": {
       "type": "object",
       "additionalProperties": false,

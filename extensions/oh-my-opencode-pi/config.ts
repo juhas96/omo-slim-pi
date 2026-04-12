@@ -79,6 +79,13 @@ export interface PantheonConfig {
     githubToken?: string;
     defaultDocsSite?: string;
   };
+  updates?: {
+    enabled?: boolean;
+    notify?: boolean;
+    checkIntervalHours?: number;
+    skipLocalCheckout?: boolean;
+    cacheFile?: string;
+  };
   skills?: {
     setupHints?: boolean;
     defaultAllow?: string[];
@@ -172,6 +179,7 @@ const TOP_LEVEL_CONFIG_KEYS = new Set([
   "background",
   "multiplexer",
   "research",
+  "updates",
   "skills",
   "adapters",
   "delegation",
@@ -204,6 +212,7 @@ const FALLBACK_KEYS = new Set(["timeoutMs", "delegateTimeoutMs", "retryDelayMs",
 const BACKGROUND_KEYS = new Set(["enabled", "pollIntervalMs", "logDir", "maxConcurrent", "reuseSessions", "heartbeatIntervalMs", "staleAfterMs"]);
 const MULTIPLEXER_KEYS = new Set(["tmux", "splitDirection", "layout", "focusOnSpawn", "keepPaneOnFinish", "reuseWindow", "windowName", "projectScopedWindow"]);
 const RESEARCH_KEYS = new Set(["timeoutMs", "userAgent", "maxResults", "githubToken", "defaultDocsSite"]);
+const UPDATES_KEYS = new Set(["enabled", "notify", "checkIntervalHours", "skipLocalCheckout", "cacheFile"]);
 const SKILLS_KEYS = new Set(["setupHints", "defaultAllow", "defaultDeny", "cartography"]);
 const CARTOGRAPHY_KEYS = new Set(["enabled", "maxFiles", "maxDepth", "maxPerDirectory", "exclude"]);
 const ADAPTER_KEYS = new Set(["disableAll", "disabled", "defaultAllow", "defaultDeny", "modules"]);
@@ -537,6 +546,7 @@ function lintConfigFragment(raw: RawObject, diagnostics: PantheonConfigDiagnosti
   if (isObject(raw.fallback)) lintUnknownKeys(raw.fallback, FALLBACK_KEYS, diagnostics, source, joinConfigPath(scope, "fallback"));
   if (isObject(raw.background)) lintUnknownKeys(raw.background, BACKGROUND_KEYS, diagnostics, source, joinConfigPath(scope, "background"));
   if (isObject(raw.research)) lintUnknownKeys(raw.research, RESEARCH_KEYS, diagnostics, source, joinConfigPath(scope, "research"));
+  if (isObject(raw.updates)) lintUnknownKeys(raw.updates, UPDATES_KEYS, diagnostics, source, joinConfigPath(scope, "updates"));
   if (isObject(raw.delegation)) lintUnknownKeys(raw.delegation, DELEGATION_KEYS, diagnostics, source, joinConfigPath(scope, "delegation"));
   if (isObject(raw.autoContinue)) lintUnknownKeys(raw.autoContinue, AUTO_CONTINUE_KEYS, diagnostics, source, joinConfigPath(scope, "autoContinue"));
   if (isObject(raw.workflow)) lintUnknownKeys(raw.workflow, WORKFLOW_KEYS, diagnostics, source, joinConfigPath(scope, "workflow"));
@@ -763,6 +773,13 @@ function getDefaultConfig(): PantheonConfig {
       githubToken: undefined,
       defaultDocsSite: undefined,
     },
+    updates: {
+      enabled: true,
+      notify: true,
+      checkIntervalHours: 24,
+      skipLocalCheckout: true,
+      cacheFile: path.join(getAgentDir(), "oh-my-opencode-pi-update-check.json"),
+    },
     skills: {
       setupHints: true,
       defaultAllow: [],
@@ -917,6 +934,16 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     if (isNonEmptyString(input.research.userAgent)) config.research!.userAgent = input.research.userAgent.trim();
     if (isNonEmptyString(input.research.githubToken)) config.research!.githubToken = input.research.githubToken.trim();
     if (isNonEmptyString(input.research.defaultDocsSite)) config.research!.defaultDocsSite = input.research.defaultDocsSite.trim();
+  }
+
+  if (isObject(input.updates)) {
+    if (typeof input.updates.enabled === "boolean") config.updates!.enabled = input.updates.enabled;
+    if (typeof input.updates.notify === "boolean") config.updates!.notify = input.updates.notify;
+    if (typeof input.updates.checkIntervalHours === "number" && Number.isFinite(input.updates.checkIntervalHours) && input.updates.checkIntervalHours >= 1) {
+      config.updates!.checkIntervalHours = Math.floor(input.updates.checkIntervalHours);
+    }
+    if (typeof input.updates.skipLocalCheckout === "boolean") config.updates!.skipLocalCheckout = input.updates.skipLocalCheckout;
+    if (isNonEmptyString(input.updates.cacheFile)) config.updates!.cacheFile = input.updates.cacheFile.trim();
   }
 
   if (isObject(input.skills)) {

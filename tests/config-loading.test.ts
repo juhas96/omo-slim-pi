@@ -49,6 +49,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
   fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), `{
     "extends": ["durable"],
     "research": { "maxResults": 9 },
+    "updates": { "notify": false, "checkIntervalHours": 12 },
     "multiplexer": { "projectScopedWindow": false },
     "agents": {
       "explorer": {
@@ -72,6 +73,8 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.equal(result.config.background?.staleAfterMs, 12000);
     assert.equal(result.config.fallback?.retryOnEmpty, true);
     assert.equal(result.config.research?.maxResults, 9);
+    assert.equal(result.config.updates?.notify, false);
+    assert.equal(result.config.updates?.checkIntervalHours, 12);
     assert.equal(result.config.agents?.fixer?.model, "openai/gpt-4.1");
     assert.equal(result.config.agents?.fixer?.variant, "high");
     assert.equal(result.config.agents?.fixer?.promptOverrideFile, globalPrompt);

@@ -192,7 +192,7 @@ This pi package ports the most valuable `oh-my-opencode-slim` ideas into pi's na
 - multi-model consensus via `pantheon_council`
 - background specialist tasks with status, wait, result, retry, cancel, and attach flows
 - tmux-backed multiplexer support for live background logs
-- structured research through adapters and docs-aware fetch/search helpers
+- structured research through adapters and docs-aware fetch/search helpers, including smart `pantheon_webfetch`
 - cartography / codemap workflows via a bundled `cartography` skill
 - workflow-state persistence, auto-continue, and resume helpers
 - richer code intelligence: LSP navigation, rename, organize-imports, format, patch, AST-grep
@@ -306,6 +306,8 @@ For the full option map, presets, council config, adapter policy, and schema gui
 | `/pantheon-backgrounds` | Inspect recent background tasks |
 | `/pantheon-runtime` | Inspect runtime/parity state |
 | `/pantheon-stats` | Inspect usage and reliability statistics |
+| `/pantheon-version` | Inspect installed package version and cached update state |
+| `/pantheon-update-check` | Force a fresh package update check |
 
 For the full command list, see [`docs/quick-reference.md`](docs/quick-reference.md) and [`docs/tools.md`](docs/tools.md).
 
@@ -338,7 +340,7 @@ For the full command list, see [`docs/quick-reference.md`](docs/quick-reference.
 ### Research and repository mapping
 
 - `pantheon_adapter_*`
-- `pantheon_fetch*`, `pantheon_search`
+- `pantheon_webfetch`, `pantheon_fetch*`, `pantheon_search`
 - `pantheon_repo_map`
 - `pantheon_code_map`
 

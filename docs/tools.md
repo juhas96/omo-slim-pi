@@ -92,6 +92,7 @@ For larger refactors, Pantheon also exposes a more patch-oriented path that can 
 
 Direct research tools:
 
+- `pantheon_webfetch`
 - `pantheon_fetch`
 - `pantheon_search`
 - `pantheon_resolve_docs`
@@ -100,6 +101,8 @@ Direct research tools:
 - `pantheon_github_releases`
 - `pantheon_npm_info`
 - `pantheon_package_docs`
+
+Use `pantheon_webfetch` when you want a smarter single-URL fetch for docs/static sites: it can probe `llms.txt`, extract main article content from HTML, and block unsafe cross-origin redirects by default. Keep `pantheon_fetch` for simpler raw page text retrieval.
 
 Structured adapter tools:
 
@@ -117,6 +120,11 @@ For practical command selection and recovery sequences, see [workflows.md](workf
 - `pantheon_runtime_info`
 - `pantheon_hook_trace`
 - `pantheon_multiplexer_status`
+
+Useful version/update commands:
+
+- `/pantheon-version`
+- `/pantheon-update-check`
 
 These help debug orchestration behavior, runtime parity limitations, and active background-task state.
 

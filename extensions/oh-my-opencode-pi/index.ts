@@ -132,6 +132,8 @@ import {
 } from "./adapter-selection.js";
 import { buildAdapterPolicyReport, buildConfigReport, buildDoctorReport } from "./reports.js";
 import { presentPantheonCommandEditorOutput, presentPantheonCommandProgress, presentPantheonCommandResult } from "./presentation.js";
+import { smartFetch } from "./smartfetch.js";
+import { checkForPackageUpdates, renderPackageUpdateReport } from "./update-checker.js";
 
 export { selectAdapterIds, summarizeAdapterSearchSections } from "./adapter-selection.js";
 
@@ -174,6 +176,7 @@ const AUTO_CONTINUE_KEY = "oh-my-opencode-pi-auto-continue";
 const WORKFLOW_GUIDANCE_KEY = "oh-my-opencode-pi-workflow-guidance";
 const SUBAGENT_ACTIVITY_KEY = "oh-my-opencode-pi-subagent-activity";
 const COMMAND_PROGRESS_STATUS_KEY = "oh-my-opencode-pi-command-progress";
+const VERSION_STATUS_KEY = "oh-my-opencode-pi-version";
 let latestSubagentActivity: SubagentActivityState | undefined;
 
 function getFinalOutput(messages: Message[]): string {
@@ -1099,6 +1102,14 @@ const BackgroundCancelParams = Type.Object({
 
 const FetchParams = Type.Object({
   url: Type.String({ description: "URL to fetch" }),
+});
+
+const WebfetchParams = Type.Object({
+  url: Type.String({ description: "URL to fetch with docs-aware extraction" }),
+  preferLlmsTxt: Type.Optional(Type.String({ description: "llms.txt preference mode: auto, always, or never.", default: "auto" })),
+  extractMain: Type.Optional(Type.Boolean({ description: "Extract main docs/article content for HTML pages. Default true.", default: true })),
+  allowCrossOriginRedirects: Type.Optional(Type.Boolean({ description: "Allow redirects to a different origin. Default false.", default: false })),
+  maxChars: Type.Optional(Type.Number({ description: "Maximum response characters to return.", default: 12000 })),
 });
 
 const SearchParams = Type.Object({
@@ -2339,6 +2350,18 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus(CONFIG_WARNING_KEY, "oh-my-opencode-pi ready");
     }
 
+    ctx.ui.setStatus(VERSION_STATUS_KEY, undefined);
+    if (process.env[SUBAGENT_ENV] !== "1" && configResult.config.updates?.enabled !== false) {
+      void checkForPackageUpdates(configResult.config).then((report) => {
+        if (configResult.config.updates?.notify === false) return;
+        if (report.status === "update-available" && report.latestVersion) {
+          ctx.ui.setStatus(VERSION_STATUS_KEY, `Update available: ${report.currentVersion} → ${report.latestVersion}`);
+        }
+      }).catch(() => {
+        // ignore background update-check failures during session startup
+      });
+    }
+
     if (poller) clearInterval(poller);
     if (configResult.config.background?.enabled !== false) {
       const taskDir = ensureDir(configResult.config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
@@ -2673,6 +2696,32 @@ export default function (pi: ExtensionAPI) {
     presentPantheonCommandEditorOutput("/pantheon-stats", renderPantheonStats(stats, evalReport), ctx, {
       summary: "Pantheon usage, reliability, and evaluation statistics",
       notifyMessage: "Loaded Pantheon stats into editor.",
+    });
+  }
+
+  async function handlePantheonVersionCommand(_args: string, ctx: ExtensionContext) {
+    const config = loadPantheonConfig(ctx.cwd).config;
+    const report = await checkForPackageUpdates(config);
+    if (report.status === "update-available" && config.updates?.notify !== false && report.latestVersion) {
+      ctx.ui.setStatus(VERSION_STATUS_KEY, `Update available: ${report.currentVersion} → ${report.latestVersion}`);
+    }
+    presentPantheonCommandEditorOutput("/pantheon-version", renderPackageUpdateReport(report), ctx, {
+      summary: report.updateAvailable ? `Update available: ${report.currentVersion} → ${report.latestVersion}` : `Pantheon version ${report.currentVersion}`,
+      notifyMessage: "Loaded package version report into editor.",
+      status: report.status === "error" ? "error" : report.updateAvailable ? "warning" : report.status === "skipped" ? "warning" : "success",
+    });
+  }
+
+  async function handlePantheonUpdateCheckCommand(_args: string, ctx: ExtensionContext) {
+    const config = loadPantheonConfig(ctx.cwd).config;
+    const report = await checkForPackageUpdates(config, { force: true });
+    if (report.status === "update-available" && config.updates?.notify !== false && report.latestVersion) {
+      ctx.ui.setStatus(VERSION_STATUS_KEY, `Update available: ${report.currentVersion} → ${report.latestVersion}`);
+    }
+    presentPantheonCommandEditorOutput("/pantheon-update-check", renderPackageUpdateReport(report, true), ctx, {
+      summary: report.updateAvailable ? `Refresh found ${report.latestVersion}` : `Package version check: ${report.status}`,
+      notifyMessage: "Loaded refreshed package version report into editor.",
+      status: report.status === "error" ? "error" : report.updateAvailable ? "warning" : report.status === "skipped" ? "warning" : "success",
     });
   }
 
@@ -3154,6 +3203,8 @@ export default function (pi: ExtensionAPI) {
         { value: "agents", label: "List agents", description: "Show bundled and override Pantheon specialists." },
         { value: "skills", label: "Skills setup", description: "Show skill policy guidance, bundled cartography workflow notes, and a starter config snippet." },
         { value: "stats", label: "Stats", description: "Inspect Pantheon usage and reliability statistics." },
+        { value: "version", label: "Package version", description: "Inspect the installed package version and cached update information." },
+        { value: "update-check", label: "Refresh update check", description: "Force a fresh check for the latest published package version." },
         { value: "hooks", label: "Hook trace", description: "Inspect Pantheon orchestration middleware ordering and restored trace state." },
         { value: "adapter-health", label: "Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
         { value: "doctor", label: "Doctor", description: "Run a broader Pantheon health check across config, adapters, tmux, and background storage." },
@@ -3229,6 +3280,14 @@ export default function (pi: ExtensionAPI) {
 
       if (action === "stats") {
         await handlePantheonStatsCommand("", ctx);
+        return;
+      }
+      if (action === "version") {
+        await handlePantheonVersionCommand("", ctx);
+        return;
+      }
+      if (action === "update-check") {
+        await handlePantheonUpdateCheckCommand("", ctx);
         return;
       }
       if (action === "hooks") {
@@ -3326,6 +3385,16 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("pantheon-stats", {
     description: "Show Pantheon usage and reliability statistics",
     handler: handlePantheonStatsCommand,
+  });
+
+  pi.registerCommand("pantheon-version", {
+    description: "Show the installed package version and cached update information",
+    handler: handlePantheonVersionCommand,
+  });
+
+  pi.registerCommand("pantheon-update-check", {
+    description: "Force a fresh package update check and show the latest package version report",
+    handler: handlePantheonUpdateCheckCommand,
   });
 
   pi.registerCommand("pantheon-debug-dir", {
@@ -4516,6 +4585,32 @@ export default function (pi: ExtensionAPI) {
         return { content: [{ type: "text", text: result.text }], details: { adapter: adapter.id, details: result.details } };
       } catch (error) {
         return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_webfetch",
+    label: "Pantheon Webfetch",
+    description: "Fetch a URL with docs-aware extraction, llms.txt probing, and safe redirect handling.",
+    promptSnippet: "Use smart webfetch for docs/static pages when you want llms.txt-aware extraction instead of a basic raw fetch.",
+    parameters: WebfetchParams,
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      try {
+        const config = loadPantheonConfig(ctx.cwd).config;
+        const result = await smartFetch(params.url, {
+          timeoutMs: config.research?.timeoutMs ?? 15000,
+          userAgent: config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+          signal,
+          preferLlmsTxt: params.preferLlmsTxt === "always" || params.preferLlmsTxt === "never" ? params.preferLlmsTxt : "auto",
+          extractMain: params.extractMain !== false,
+          allowCrossOriginRedirects: params.allowCrossOriginRedirects === true,
+          maxChars: Math.max(1000, Math.floor(params.maxChars ?? 12000)),
+        });
+        return { content: [{ type: "text", text: result.text }], details: result.details };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: message }], details: { url: params.url, error: message }, isError: true };
       }
     },
   });

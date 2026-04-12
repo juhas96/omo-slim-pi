@@ -201,6 +201,14 @@ See [council.md](council.md) for usage guidance.
 - `adapters.defaultDeny`
 - `adapters.modules`
 
+### Package updates
+
+- `updates.enabled`
+- `updates.notify`
+- `updates.checkIntervalHours`
+- `updates.skipLocalCheckout`
+- `updates.cacheFile`
+
 ### Skills
 
 - `skills.setupHints`
@@ -236,6 +244,33 @@ See [council.md](council.md) for usage guidance.
 - `ui.maxBackgroundTasks`
 - `debug.enabled`
 - `debug.logDir`
+
+---
+
+## Update-checker notes
+
+The package update checker is intentionally quiet.
+
+Recommended defaults:
+
+```jsonc
+{
+  "updates": {
+    "enabled": true,
+    "notify": true,
+    "checkIntervalHours": 24,
+    "skipLocalCheckout": true
+  }
+}
+```
+
+Guidance:
+
+- keep `notify: true` for normal installed package usage
+- set `updates.enabled: false` if you intentionally pin package versions and do not want notices
+- keep `skipLocalCheckout: true` when developing from a local clone or path install
+- use `/pantheon-version` to inspect cached state
+- use `/pantheon-update-check` to force a refresh
 
 ---
 

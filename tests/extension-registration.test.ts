@@ -50,6 +50,7 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(tools.includes("pantheon_adapter_health"));
   assert.ok(tools.includes("pantheon_adapter_search"));
   assert.ok(tools.includes("pantheon_adapter_fetch"));
+  assert.ok(tools.includes("pantheon_webfetch"));
   assert.ok(commands.includes("review"));
   assert.ok(commands.includes("pantheon"));
   assert.ok(commands.includes("pantheon-config"));
@@ -61,6 +62,8 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(commands.includes("pantheon-doctor"));
   assert.ok(commands.includes("pantheon-subagents"));
   assert.ok(commands.includes("pantheon-stats"));
+  assert.ok(commands.includes("pantheon-version"));
+  assert.ok(commands.includes("pantheon-update-check"));
   assert.ok(!commands.includes("pantheon-spec"));
   assert.ok(commands.includes("pantheon-spec-studio"));
   assert.ok(!commands.includes("pantheon-interview"));

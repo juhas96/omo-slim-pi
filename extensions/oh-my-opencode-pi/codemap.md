@@ -20,6 +20,8 @@ This is where the package turns prompts and configuration into actual pi command
 | `ui.ts` | TUI helper rendering for selectors, dashboards, tool timeline output, and status chips. |
 | `debug.ts` | Persistent foreground debug traces and per-subagent artifacts. |
 | `stats.ts` | Usage/failure accounting for tools, categories, adapters, and background outcomes. |
+| `smartfetch.ts` | Docs-aware web fetch helper: llms.txt probing, redirect safety, and HTML main-content extraction. |
+| `update-checker.ts` | Package version check cache, npm registry lookup, and low-noise update reporting helpers. |
 | `setup.ts` | Bootstrap scaffolding and spec-template generation helpers. |
 | `hooks/fallback.ts` | Timeout/fallback model resolution for delegate/council/background attempts. |
 | `hooks/json-recovery.ts` | Tolerant `edit` rescue and JSON-ish recovery behavior. |
@@ -43,6 +45,7 @@ Most runtime behavior is steered through `PantheonConfig`, including:
 - background limits
 - tmux behavior
 - debug and workflow persistence
+- package update check behavior
 
 ### Persistent detached work
 
