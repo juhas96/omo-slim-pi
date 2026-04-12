@@ -17,6 +17,21 @@ function previewText(text: string, max = 180): string {
   return `${clean.slice(0, max)}…`;
 }
 
+function summarizeSingleResult(task: BackgroundTaskRecord["result"]): string {
+  if (!task) return "(no output)";
+  for (let i = task.messages.length - 1; i >= 0; i--) {
+    const message = task.messages[i];
+    if (message.role !== "assistant") continue;
+    const content = Array.isArray(message.content) ? message.content : [];
+    for (const part of content) {
+      if (part.type === "text" && part.text.trim()) return part.text.trim();
+    }
+  }
+  if (task.errorMessage?.trim()) return task.errorMessage.trim();
+  if (task.stderr.trim()) return task.stderr.trim();
+  return "(no output)";
+}
+
 function getRunnerPath(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./background-runner.mjs");
 }
@@ -60,44 +75,162 @@ export function readBackgroundTaskSpec(specPath: string): BackgroundTaskSpec | u
   }
 }
 
-export function summarizeBackgroundCounts(tasks: BackgroundTaskRecord[]): string {
+export function summarizeBackgroundCounts(tasks: BackgroundTaskRecord[], staleAfterMs = 20000): string {
   const queued = tasks.filter((task) => task.status === "queued").length;
   const running = tasks.filter((task) => task.status === "running").length;
   const failed = tasks.filter((task) => task.status === "failed").length;
   const completed = tasks.filter((task) => task.status === "completed").length;
+  const stale = tasks.filter((task) => isTaskStale(task, staleAfterMs)).length;
   if (queued + running + failed + completed === 0) return "Pantheon background: idle";
-  return `Pantheon background: ${running} running, ${queued} queued${failed > 0 ? `, ${failed} failed` : ""}${completed > 0 ? `, ${completed} done` : ""}`;
+  return `Pantheon background: ${running} running, ${queued} queued${stale > 0 ? `, ${stale} stale` : ""}${failed > 0 ? `, ${failed} failed` : ""}${completed > 0 ? `, ${completed} done` : ""}`;
 }
 
-export function renderBackgroundOverview(tasks: BackgroundTaskRecord[], maxRecent = 8): string {
+export function describeBackgroundTask(task: BackgroundTaskRecord, maxPreview = 120, staleAfterMs = 20000): string {
+  return `${task.id} [${isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status}] ${task.agent} — ${task.summary ?? previewText(task.task, maxPreview)}`;
+}
+
+function formatDuration(ms: number | undefined): string {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return "n/a";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = Math.round(ms / 100) / 10;
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 6) / 10;
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 6) / 10;
+  return `${hours}h`;
+}
+
+function deriveTaskDuration(task: BackgroundTaskRecord, now = Date.now()): number | undefined {
+  if (typeof task.result?.durationMs === "number") return task.result.durationMs;
+  if (typeof task.finishedAt === "number" && typeof task.startedAt === "number") return Math.max(0, task.finishedAt - task.startedAt);
+  if ((task.status === "running" || task.status === "queued") && typeof task.startedAt === "number") return Math.max(0, now - task.startedAt);
+  return undefined;
+}
+
+export function buildBackgroundNextSteps(task: BackgroundTaskRecord, staleAfterMs = 20000): string[] {
+  const lines = [
+    `- Open action menu: /pantheon-task-actions ${task.id}`,
+    `- Inspect result: /pantheon-result ${task.id}`,
+    `- Inspect watch view: /pantheon-watch ${task.id}`,
+    `- Inspect log tail: /pantheon-log ${task.id}`,
+  ];
+  if (task.status === "queued" || task.status === "running") lines.push(`- Attach live pane: /pantheon-attach ${task.id}`);
+  if (task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs)) lines.push(`- Retry task: /pantheon-retry ${task.id}`);
+  return lines;
+}
+
+export function renderBackgroundOverview(tasks: BackgroundTaskRecord[], maxRecent = 8, staleAfterMs = 20000): string {
   const queued = tasks.filter((task) => task.status === "queued");
   const running = tasks.filter((task) => task.status === "running");
   const completed = tasks.filter((task) => task.status === "completed");
   const failed = tasks.filter((task) => task.status === "failed" || task.status === "cancelled");
+  const stale = tasks.filter((task) => isTaskStale(task, staleAfterMs));
   const recent = tasks.slice(0, Math.max(1, maxRecent));
+  const terminal = completed.length + failed.length;
+  const completionRate = terminal > 0 ? `${Math.round((completed.length / terminal) * 100)}%` : "n/a";
 
   return [
-    summarizeBackgroundCounts(tasks),
+    summarizeBackgroundCounts(tasks, staleAfterMs),
     `\nQueued: ${queued.length}`,
     `Running: ${running.length}`,
     `Completed: ${completed.length}`,
     `Failed/Cancelled: ${failed.length}`,
-    recent.length > 0 ? `\nRecent tasks:\n${recent.map((task) => `- ${task.id} [${task.status}] ${task.agent} — ${task.summary ?? previewText(task.task, 120)}`).join("\n")}` : undefined,
+    `Stale: ${stale.length}`,
+    `Completion rate: ${completionRate}`,
+    recent.length > 0 ? `\nRecent tasks:\n${recent.map((task) => `- ${describeBackgroundTask(task, 120, staleAfterMs)}${deriveTaskDuration(task) != null ? ` (${formatDuration(deriveTaskDuration(task))})` : ""}`).join("\n")}` : undefined,
+    failed.length > 0 || stale.length > 0
+      ? `\nSuggested next steps:\n- Inspect failed or stale work with /pantheon-result <taskId> or /pantheon-watch <taskId>\n- Retry terminal failures with /pantheon-retry <taskId>`
+      : running.length > 0
+        ? `\nSuggested next steps:\n- Use /pantheon-watch <taskId> for live metadata and logs\n- Use /pantheon-attach <taskId> to follow a live pane in tmux`
+        : undefined,
   ].filter((item): item is string => Boolean(item)).join("\n");
 }
 
-export function getBackgroundStatusCounts(tasks: BackgroundTaskRecord[]) {
+export function getBackgroundStatusCounts(tasks: BackgroundTaskRecord[], staleAfterMs = 20000) {
   return {
     queued: tasks.filter((task) => task.status === "queued").length,
     running: tasks.filter((task) => task.status === "running").length,
     completed: tasks.filter((task) => task.status === "completed").length,
     failed: tasks.filter((task) => task.status === "failed").length,
     cancelled: tasks.filter((task) => task.status === "cancelled").length,
+    stale: tasks.filter((task) => isTaskStale(task, staleAfterMs)).length,
   };
 }
 
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function hashText(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36).slice(0, 6);
+}
+
+export function getBackgroundSessionKey(agent: string, cwd: string, task: string): string {
+  return `${agent}:${hashText(`${cwd}::${task.trim().toLowerCase()}`)}`;
+}
+
+export function isTaskStale(task: BackgroundTaskRecord, staleAfterMs = 20000, now = Date.now()): boolean {
+  if (task.status !== "running") return false;
+  const heartbeatAt = task.heartbeatAt ?? task.startedAt ?? task.createdAt;
+  return now - heartbeatAt > Math.max(1000, staleAfterMs);
+}
+
+function formatAge(timestamp: number | undefined, now = Date.now()): string {
+  if (!timestamp) return "n/a";
+  const delta = Math.max(0, now - timestamp);
+  if (delta < 1000) return `${delta}ms ago`;
+  const seconds = Math.floor(delta / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
+export function renderBackgroundWatch(task: BackgroundTaskRecord, maxLines = 80, staleAfterMs = 20000): string {
+  const stale = isTaskStale(task, staleAfterMs);
+  return [
+    `${task.id} [${stale ? `${task.status}/stale` : task.status}] ${task.agent}`,
+    `Task: ${task.task}`,
+    task.summary ? `Summary: ${task.summary}` : undefined,
+    task.sessionKey ? `Session key: ${task.sessionKey}` : undefined,
+    `Created: ${new Date(task.createdAt).toISOString()}`,
+    task.startedAt ? `Started: ${new Date(task.startedAt).toISOString()}` : undefined,
+    task.finishedAt ? `Finished: ${new Date(task.finishedAt).toISOString()}` : undefined,
+    `Duration: ${formatDuration(deriveTaskDuration(task))}`,
+    `Heartbeat: ${formatAge(task.heartbeatAt)}`,
+    `Watched: ${task.watchCount ?? 0}`,
+    task.reusedFrom ? `Reused from: ${task.reusedFrom}` : undefined,
+    "",
+    "Suggested next steps:",
+    ...buildBackgroundNextSteps(task, staleAfterMs),
+    "",
+    "Log tail:",
+    tailLog(task.logPath, maxLines),
+  ].filter((line): line is string => Boolean(line)).join("\n");
+}
+
+export function renderBackgroundResult(task: BackgroundTaskRecord, options?: { includeLogTail?: boolean; logLines?: number; staleAfterMs?: number }): string {
+  const staleAfterMs = options?.staleAfterMs ?? 20000;
+  const logTail = options?.includeLogTail ? `\n\nLog tail:\n${tailLog(task.logPath, Math.max(1, Math.floor(options?.logLines ?? 60)))}` : "";
+  return [
+    `${task.id} [${isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status}] ${task.agent}`,
+    `Task: ${task.task}`,
+    `Duration: ${formatDuration(deriveTaskDuration(task))}`,
+    task.summary ? `\nSummary:\n${task.summary}` : `\nSummary:\n(no summary)`,
+    task.result ? `\nResult:\n${summarizeSingleResult(task.result)}` : undefined,
+    `\nSuggested next steps:\n${buildBackgroundNextSteps(task, staleAfterMs).join("\n")}`,
+    logTail,
+  ].filter((line): line is string => Boolean(line)).join("\n");
+}
+
+function findReusableBackgroundTask(tasks: BackgroundTaskRecord[], sessionKey: string | undefined, staleAfterMs: number): BackgroundTaskRecord | undefined {
+  if (!sessionKey) return undefined;
+  return tasks.find((task) => task.sessionKey === sessionKey && (task.status === "queued" || (task.status === "running" && !isTaskStale(task, staleAfterMs))));
 }
 
 function tmuxCapture(args: string[]): string | undefined {
@@ -141,13 +274,16 @@ function isTmuxPaneAlive(paneId?: string): boolean {
   return Boolean(tmuxCapture(["display-message", "-p", "-t", paneId, "#{pane_id}"]));
 }
 
-function resolveTmuxWindowName(multiplexer: PantheonConfig["multiplexer"] | undefined): string {
-  return multiplexer?.windowName?.trim() || "pantheon-bg";
+export function getMultiplexerWindowName(ctxCwd: string, multiplexer: PantheonConfig["multiplexer"] | undefined): string {
+  const base = multiplexer?.windowName?.trim() || "pantheon-bg";
+  if (multiplexer?.projectScopedWindow === false) return base;
+  const project = path.basename(ctxCwd) || "project";
+  return `${base}-${project}-${hashText(ctxCwd)}`;
 }
 
-function ensureTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined): { paneId?: string; windowTarget?: string } {
+function ensureTmuxWindow(ctxCwd: string, multiplexer: PantheonConfig["multiplexer"] | undefined): { paneId?: string; windowTarget?: string } {
   if (!process.env.TMUX || !multiplexer?.tmux) return {};
-  const windowName = resolveTmuxWindowName(multiplexer);
+  const windowName = getMultiplexerWindowName(ctxCwd, multiplexer);
   if (multiplexer.reuseWindow === false) return {};
   const existingWindow = tmuxCapture(["list-windows", "-F", "#{window_id}:#{window_name}"])
     ?.split(/\r?\n/)
@@ -164,9 +300,9 @@ function ensureTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined
   return { paneId: paneId || undefined, windowTarget: windowTarget || undefined };
 }
 
-function focusTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined): void {
+function focusTmuxWindow(ctxCwd: string, multiplexer: PantheonConfig["multiplexer"] | undefined): void {
   if (!process.env.TMUX || !multiplexer?.tmux || !multiplexer.focusOnSpawn) return;
-  const windowName = resolveTmuxWindowName(multiplexer);
+  const windowName = getMultiplexerWindowName(ctxCwd, multiplexer);
   try {
     execFileSync("tmux", ["select-window", "-t", windowName], { stdio: ["ignore", "ignore", "ignore"] });
   } catch {
@@ -174,12 +310,12 @@ function focusTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined)
   }
 }
 
-function maybeOpenTmuxPane(logPath: string, title: string, multiplexer: PantheonConfig["multiplexer"] | undefined): string | undefined {
+function maybeOpenTmuxPane(ctxCwd: string, logPath: string, title: string, multiplexer: PantheonConfig["multiplexer"] | undefined): string | undefined {
   if (!process.env.TMUX || !multiplexer?.tmux) return undefined;
   try {
     const flag = multiplexer.splitDirection === "horizontal" ? "-h" : "-v";
     const command = `tail -f ${shellEscape(logPath)}`;
-    const window = ensureTmuxWindow(multiplexer);
+    const window = ensureTmuxWindow(ctxCwd, multiplexer);
     const splitArgs = ["split-window", flag, "-d", "-P", "-F", "#{pane_id}"];
     if (window.windowTarget) splitArgs.push("-t", window.windowTarget);
     splitArgs.push(command);
@@ -191,7 +327,7 @@ function maybeOpenTmuxPane(logPath: string, title: string, multiplexer: Pantheon
     maybeSetTmuxPaneTitle(paneId || undefined, title);
     maybeApplyTmuxLayout(multiplexer.layout, window.windowTarget);
     maybeFocusTmuxPane(paneId || undefined, multiplexer.focusOnSpawn);
-    focusTmuxWindow(multiplexer);
+    focusTmuxWindow(ctxCwd, multiplexer);
     return paneId || undefined;
   } catch {
     return undefined;
@@ -207,19 +343,21 @@ export function closeTmuxPane(paneId?: string): void {
   }
 }
 
-export function attachAllBackgroundTaskPanes(tasks: BackgroundTaskRecord[], multiplexer: PantheonConfig["multiplexer"] | undefined): BackgroundTaskRecord[] {
-  return tasks.map((task) => (task.status === "queued" || task.status === "running") ? attachBackgroundTaskPane(task, multiplexer) : task);
+export function attachAllBackgroundTaskPanes(tasks: BackgroundTaskRecord[], multiplexer: PantheonConfig["multiplexer"] | undefined, ctxCwd = process.cwd()): BackgroundTaskRecord[] {
+  return tasks.map((task) => (task.status === "queued" || task.status === "running") ? attachBackgroundTaskPane(task, multiplexer, ctxCwd) : task);
 }
 
-export function attachBackgroundTaskPane(task: BackgroundTaskRecord, multiplexer: PantheonConfig["multiplexer"] | undefined): BackgroundTaskRecord {
+export function attachBackgroundTaskPane(task: BackgroundTaskRecord, multiplexer: PantheonConfig["multiplexer"] | undefined, ctxCwd = process.cwd()): BackgroundTaskRecord {
   if (isTmuxPaneAlive(task.paneId)) {
     maybeFocusTmuxPane(task.paneId, true);
-    focusTmuxWindow(multiplexer);
-    return task;
+    focusTmuxWindow(ctxCwd, multiplexer);
+    const watched = { ...task, watchCount: (task.watchCount ?? 0) + 1 };
+    writeBackgroundTask(watched);
+    return watched;
   }
-  const paneId = maybeOpenTmuxPane(task.logPath, `${task.agent}: ${task.summary ?? task.task}`, multiplexer);
+  const paneId = maybeOpenTmuxPane(ctxCwd, task.logPath, `${task.agent}: ${task.summary ?? task.task}`, multiplexer);
   if (!paneId) return task;
-  const updated = { ...task, paneId };
+  const updated = { ...task, paneId, watchCount: (task.watchCount ?? 0) + 1 };
   writeBackgroundTask(updated);
   return updated;
 }
@@ -239,10 +377,11 @@ export function startBackgroundTaskProcess(ctxCwd: string, task: BackgroundTaskR
     status: "running",
     pid: proc.pid,
     startedAt: Date.now(),
+    heartbeatAt: Date.now(),
   };
   proc.unref();
   if (!isTmuxPaneAlive(updated.paneId)) {
-    updated.paneId = maybeOpenTmuxPane(updated.logPath, `${updated.agent}: ${updated.task}`, multiplexer);
+    updated.paneId = maybeOpenTmuxPane(ctxCwd, updated.logPath, `${updated.agent}: ${updated.task}`, multiplexer);
   }
   writeBackgroundTask(updated);
   return updated;
@@ -260,12 +399,27 @@ export function enqueueBackgroundSpec(
   },
 ): BackgroundTaskRecord {
   const config = loadPantheonConfig(ctxCwd).config;
+  const staleAfterMs = config.background?.staleAfterMs ?? 20000;
+  const sessionKey = getBackgroundSessionKey(seed.agent, seed.cwd, seed.task);
+  const reconciled = reconcileBackgroundTasks(options.taskDir, config.multiplexer, staleAfterMs);
+  const reusable = config.background?.reuseSessions === false ? undefined : findReusableBackgroundTask(reconciled, sessionKey, staleAfterMs);
+  if (reusable) {
+    const updated: BackgroundTaskRecord = {
+      ...reusable,
+      summary: `Reused active background session ${reusable.id}`,
+      reusedFrom: reusable.id,
+      watchCount: reusable.watchCount ?? 0,
+    };
+    writeBackgroundTask(updated);
+    return updated;
+  }
+
   const id = options.randomId("pantheon");
   const logPath = path.join(options.taskDir, `${id}.log`);
   const resultPath = path.join(options.taskDir, `${id}.result.json`);
   const specPath = path.join(options.taskDir, `${id}.spec.json`);
   const maxConcurrent = options.maxConcurrent ?? config.background?.maxConcurrent ?? 2;
-  const runningNow = reconcileBackgroundTasks(options.taskDir, config.multiplexer).filter((item) => item.status === "queued" || item.status === "running").length;
+  const runningNow = reconciled.filter((item) => item.status === "queued" || item.status === "running").length;
   const record: BackgroundTaskRecord = {
     id,
     agent: seed.agent,
@@ -275,6 +429,7 @@ export function enqueueBackgroundSpec(
     logPath,
     resultPath,
     specPath,
+    sessionKey,
     summary: options.retryOf ? `Retry of ${options.retryOf}` : undefined,
   };
 
@@ -282,6 +437,8 @@ export function enqueueBackgroundSpec(
     ...seed,
     logPath,
     resultPath,
+    heartbeatIntervalMs: seed.heartbeatIntervalMs ?? config.background?.heartbeatIntervalMs ?? 1500,
+    staleAfterMs: seed.staleAfterMs ?? config.background?.staleAfterMs ?? 20000,
     meta: record,
     includeProjectAgents: seed.includeProjectAgents ?? false,
     depth: seed.depth ?? 0,
@@ -373,6 +530,8 @@ export function retryBackgroundTask(
     timeoutMs: spec.timeoutMs,
     retryDelayMs: spec.retryDelayMs,
     retryOnEmpty: spec.retryOnEmpty,
+    heartbeatIntervalMs: spec.heartbeatIntervalMs,
+    staleAfterMs: spec.staleAfterMs,
     includeProjectAgents: spec.includeProjectAgents,
     depth: spec.depth,
   }, {
@@ -385,7 +544,7 @@ export function retryBackgroundTask(
 
 export function maybeStartQueuedTasks(ctxCwd: string, taskDir: string): BackgroundTaskRecord[] {
   const config = loadPantheonConfig(ctxCwd).config;
-  const tasks = listBackgroundTasks(taskDir);
+  const tasks = reconcileBackgroundTasks(taskDir, config.multiplexer, config.background?.staleAfterMs ?? 20000);
   const maxConcurrent = config.background?.maxConcurrent ?? 2;
   let running = tasks.filter((task) => task.status === "running").length;
   return tasks.map((task) => {
@@ -397,7 +556,7 @@ export function maybeStartQueuedTasks(ctxCwd: string, taskDir: string): Backgrou
   });
 }
 
-export function reconcileBackgroundTasks(taskDir: string, multiplexer?: PantheonConfig["multiplexer"]): BackgroundTaskRecord[] {
+export function reconcileBackgroundTasks(taskDir: string, multiplexer?: PantheonConfig["multiplexer"], staleAfterMs = 20000): BackgroundTaskRecord[] {
   const tasks = listBackgroundTasks(taskDir);
   return tasks.map((task) => {
     if (task.status === "running" && !isProcessAlive(task.pid)) {
@@ -411,8 +570,36 @@ export function reconcileBackgroundTasks(taskDir: string, multiplexer?: Pantheon
       if (!multiplexer?.keepPaneOnFinish) closeTmuxPane(updated.paneId);
       return updated;
     }
+    if (isTaskStale(task, staleAfterMs)) {
+      const updated: BackgroundTaskRecord = {
+        ...task,
+        status: "failed",
+        finishedAt: task.finishedAt ?? Date.now(),
+        summary: task.summary ?? `Background session became stale (no heartbeat for ${staleAfterMs}ms).`,
+      };
+      writeBackgroundTask(updated);
+      if (!multiplexer?.keepPaneOnFinish) closeTmuxPane(updated.paneId);
+      return updated;
+    }
     return task;
   });
+}
+
+export function renderMultiplexerStatus(ctxCwd: string, multiplexer: PantheonConfig["multiplexer"] | undefined, tasks: BackgroundTaskRecord[], staleAfterMs = 20000): string {
+  const windowName = getMultiplexerWindowName(ctxCwd, multiplexer);
+  const liveTasks = tasks.filter((task) => task.status === "queued" || task.status === "running");
+  const paneSummary = liveTasks.map((task) => `- ${task.id}: ${task.agent} [${isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status}] pane=${task.paneId ?? "(none)"} heartbeat=${formatAge(task.heartbeatAt)} watch=${task.watchCount ?? 0}${task.sessionKey ? ` session=${task.sessionKey}` : ""}`).join("\n") || "- (no active background tasks)";
+  return [
+    `tmux enabled: ${multiplexer?.tmux === true ? "yes" : "no"}`,
+    `inside tmux: ${process.env.TMUX ? "yes" : "no"}`,
+    `window: ${windowName}`,
+    `layout: ${multiplexer?.layout ?? "main-vertical"}`,
+    `reuseWindow: ${multiplexer?.reuseWindow === false ? "no" : "yes"}`,
+    `projectScopedWindow: ${multiplexer?.projectScopedWindow === false ? "no" : "yes"}`,
+    `focusOnSpawn: ${multiplexer?.focusOnSpawn === true ? "yes" : "no"}`,
+    `staleAfterMs: ${staleAfterMs}`,
+    `\nActive panes/tasks:\n${paneSummary}`,
+  ].join("\n");
 }
 
 export function tailLog(logPath: string, maxLines = 80): string {
@@ -451,6 +638,7 @@ export function cancelBackgroundTask(task: BackgroundTaskRecord, multiplexer?: P
     ...task,
     status: "cancelled",
     finishedAt: Date.now(),
+    heartbeatAt: Date.now(),
     summary: task.summary ?? "Cancelled by user",
   };
   fs.writeFileSync(task.resultPath, JSON.stringify(updated, null, 2));

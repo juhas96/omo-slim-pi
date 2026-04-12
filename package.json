@@ -13,16 +13,24 @@
   ],
   "files": [
     "agents",
+    "bin",
+    "docs",
     "extensions",
     "prompts",
+    "skills",
     "LICENSE",
     "README.md",
+    "codemap.md",
     "oh-my-opencode-pi.schema.json",
     "package.json"
   ],
+  "bin": {
+    "oh-my-opencode-pi": "./bin/oh-my-opencode-pi.mjs"
+  },
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
+    "eval:orchestration": "tsx scripts/run-orchestration-bench.ts",
     "pack:dry": "npm pack --dry-run"
   },
   "publishConfig": {
@@ -30,7 +38,8 @@
   },
   "pi": {
     "extensions": ["./extensions/oh-my-opencode-pi"],
-    "prompts": ["./prompts"]
+    "prompts": ["./prompts"],
+    "skills": ["./skills"]
   },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",

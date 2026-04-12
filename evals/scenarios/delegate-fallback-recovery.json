@@ -1,0 +1,15 @@
+{
+  "id": "delegate-fallback-recovery",
+  "title": "Delegate fallback recovers from an empty primary response",
+  "workflow": "delegate",
+  "description": "A direct single-agent attempt would stop after an empty primary-model response, while Pantheon delegate fallback should retry on a backup model and recover a useful result.",
+  "tags": ["delegate", "fallback", "recovery"],
+  "baseline": {
+    "label": "direct-single-primary",
+    "status": "failed",
+    "durationMs": 120,
+    "attempts": 1,
+    "qualityScore": 0.1,
+    "notes": ["Primary model returned an empty answer.", "No fallback chain was available in the baseline flow."]
+  }
+}

@@ -1,0 +1,23 @@
+bg-42 [failed] fixer
+Task: Patch the thing
+Duration: 30s
+
+Summary:
+Patch failed after validation
+
+Result:
+Patch failed on verification
+
+Suggested next steps:
+- Open action menu: /pantheon-task-actions bg-42
+- Inspect result: /pantheon-result bg-42
+- Inspect watch view: /pantheon-watch bg-42
+- Inspect log tail: /pantheon-log bg-42
+- Retry task: /pantheon-retry bg-42
+
+
+Log tail:
+line 2
+line 3
+line 4
+line 5

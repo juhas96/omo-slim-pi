@@ -1,0 +1,18 @@
+Pantheon adapter policy
+
+Current agent: interactive
+Allowed adapters: docs-context7
+Blocked / unavailable adapters: web-search
+
+Allowed adapter details:
+- docs-context7 — Docs adapter
+
+Blocked / unavailable adapter details:
+- web-search — Web adapter
+
+Load errors:
+- Failed to load custom adapter from /tmp/bad.mjs
+
+Suggested next steps:
+- Adjust adapters.defaultAllow/defaultDeny or per-agent adapter policy in config if this set is not what you expect.
+- Run /pantheon-adapter-health to check readiness and auth status before external research.

@@ -30,13 +30,24 @@ test("bootstrap tool scaffolds project-local Pantheon files", async () => {
   const result = await bootstrapTool.execute("call-1", { force: false }, undefined, undefined, { cwd: projectDir });
   const text = result.content[0]?.text ?? "";
   assert.match(text, /Pantheon bootstrap complete/);
-  assert.ok(fs.existsSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc")));
+  const configPath = path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc");
+  const configText = fs.readFileSync(configPath, "utf8");
+  assert.ok(fs.existsSync(configPath));
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "pantheon-adapters", "README.md")));
+  assert.match(configText, /"oracle": \{[\s\S]*?"model": "openai\/gpt-4\.1"/);
+  assert.match(configText, /"fixer": \{[\s\S]*?"model": "openai\/gpt-4\.1-mini"/);
+  assert.match(configText, /"defaultPreset": "review-board"/);
 });
 
-test("spec studio template provides richer non-trivial outlines", () => {
-  const refactor = buildSpecStudioTemplate("refactor", "Refactor Auth Boundary");
+test("spec studio templates provide richer iterative planning outlines", () => {
+  const refactor = buildSpecStudioTemplate("refactor", "Refactor Auth Boundary", { context: "Workspace: demo", focusAreas: "architecture, rollout" });
   assert.match(refactor, /Migration Plan/);
+  assert.match(refactor, /Execution Plan/);
+  assert.match(refactor, /Decision Log/);
+  assert.match(refactor, /Focus areas: architecture, rollout/);
+
   const incident = buildSpecStudioTemplate("incident", "Investigate API Outage");
   assert.match(incident, /Impact/);
+  assert.match(incident, /Containment/);
+
 });

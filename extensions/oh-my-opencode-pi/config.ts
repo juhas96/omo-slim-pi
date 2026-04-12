@@ -58,6 +58,9 @@ export interface PantheonConfig {
     pollIntervalMs?: number;
     logDir?: string;
     maxConcurrent?: number;
+    reuseSessions?: boolean;
+    heartbeatIntervalMs?: number;
+    staleAfterMs?: number;
   };
   multiplexer?: {
     tmux?: boolean;
@@ -67,6 +70,7 @@ export interface PantheonConfig {
     keepPaneOnFinish?: boolean;
     reuseWindow?: boolean;
     windowName?: string;
+    projectScopedWindow?: boolean;
   };
   research?: {
     timeoutMs?: number;
@@ -104,9 +108,6 @@ export interface PantheonConfig {
     autoEnable?: boolean;
     autoEnableThreshold?: number;
   };
-  interview?: {
-    templateTitle?: string;
-  };
   workflow?: {
     injectHints?: boolean;
     backgroundAwareness?: boolean;
@@ -128,9 +129,17 @@ export interface PantheonConfig {
   };
 }
 
+export interface PantheonConfigDiagnostic {
+  severity: "error" | "warning";
+  path: string;
+  message: string;
+  source?: string;
+}
+
 export interface PantheonConfigLoadResult {
   config: PantheonConfig;
   warnings: string[];
+  diagnostics: PantheonConfigDiagnostic[];
   sources: {
     globalPath: string;
     projectPath: string | null;
@@ -140,6 +149,69 @@ export interface PantheonConfigLoadResult {
 }
 
 type RawObject = Record<string, unknown>;
+
+const BUILT_IN_ADAPTER_IDS = new Set([
+  "docs-context7",
+  "local-docs",
+  "grep-app",
+  "github-releases",
+  "github-code-search",
+  "npm-registry",
+  "web-search",
+]);
+
+const TOP_LEVEL_CONFIG_KEYS = new Set([
+  "$schema",
+  "preset",
+  "extends",
+  "presets",
+  "appendOrchestratorPrompt",
+  "agents",
+  "council",
+  "fallback",
+  "background",
+  "multiplexer",
+  "research",
+  "skills",
+  "adapters",
+  "delegation",
+  "autoContinue",
+  "workflow",
+  "ui",
+  "debug",
+]);
+
+const AGENT_OVERRIDE_KEYS = new Set([
+  "model",
+  "variant",
+  "options",
+  "tools",
+  "noTools",
+  "promptOverrideFile",
+  "promptAppendFiles",
+  "promptAppendText",
+  "allowSkills",
+  "denySkills",
+  "allowedAdapters",
+  "deniedAdapters",
+  "disabled",
+]);
+
+const COUNCIL_KEYS = new Set(["defaultPreset", "presets", "masterTimeoutMs", "councillorsTimeoutMs"]);
+const COUNCIL_PRESET_KEYS = new Set(["master", "councillors"]);
+const COUNCIL_MEMBER_KEYS = new Set(["name", "model", "variant", "prompt", "options"]);
+const FALLBACK_KEYS = new Set(["timeoutMs", "delegateTimeoutMs", "retryDelayMs", "retryOnEmpty", "agentTimeouts", "agentChains", "councilMaster"]);
+const BACKGROUND_KEYS = new Set(["enabled", "pollIntervalMs", "logDir", "maxConcurrent", "reuseSessions", "heartbeatIntervalMs", "staleAfterMs"]);
+const MULTIPLEXER_KEYS = new Set(["tmux", "splitDirection", "layout", "focusOnSpawn", "keepPaneOnFinish", "reuseWindow", "windowName", "projectScopedWindow"]);
+const RESEARCH_KEYS = new Set(["timeoutMs", "userAgent", "maxResults", "githubToken", "defaultDocsSite"]);
+const SKILLS_KEYS = new Set(["setupHints", "defaultAllow", "defaultDeny", "cartography"]);
+const CARTOGRAPHY_KEYS = new Set(["enabled", "maxFiles", "maxDepth", "maxPerDirectory", "exclude"]);
+const ADAPTER_KEYS = new Set(["disableAll", "disabled", "defaultAllow", "defaultDeny", "modules"]);
+const DELEGATION_KEYS = new Set(["maxDepth"]);
+const AUTO_CONTINUE_KEYS = new Set(["enabled", "cooldownMs", "maxContinuations", "autoEnable", "autoEnableThreshold"]);
+const WORKFLOW_KEYS = new Set(["injectHints", "backgroundAwareness", "todoThreshold", "persistTodos", "stateFile", "phaseReminders", "postFileToolNudges", "delegateRetryGuidance"]);
+const UI_KEYS = new Set(["dashboardWidget", "maxTodos", "maxBackgroundTasks"]);
+const DEBUG_KEYS = new Set(["enabled", "logDir"]);
 
 const DEFAULT_COUNCIL_PRESET: CouncilPresetConfig = {
   councillors: [{ name: "alpha" }, { name: "beta" }, { name: "gamma" }],
@@ -306,6 +378,10 @@ function normalizeConfigPaths(value: unknown, baseDir: string): unknown {
       result[key] = child.filter(isNonEmptyString).map((item) => path.isAbsolute(item) ? item : path.resolve(baseDir, item));
       continue;
     }
+    if (key === "$schema" && isNonEmptyString(child)) {
+      result[key] = /^https?:\/\//i.test(child) || path.isAbsolute(child) ? child : path.resolve(baseDir, child);
+      continue;
+    }
     if (key === "modules" && Array.isArray(child)) {
       result[key] = child.filter(isNonEmptyString).map((item) => path.isAbsolute(item) ? item : path.resolve(baseDir, item));
       continue;
@@ -327,6 +403,175 @@ function loadJsoncFile(filePath: string, warnings: string[]): RawObject {
   } catch (error) {
     warnings.push(`Unable to read config ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
     return {};
+  }
+}
+
+function pushDiagnostic(
+  diagnostics: PantheonConfigDiagnostic[],
+  severity: PantheonConfigDiagnostic["severity"],
+  configPath: string,
+  message: string,
+  source?: string,
+): void {
+  diagnostics.push({ severity, path: configPath, message, source });
+}
+
+function formatDiagnostic(diag: PantheonConfigDiagnostic): string {
+  return `${diag.source ? `${diag.source}: ` : ""}${diag.path} — ${diag.message}`;
+}
+
+function dedupeDiagnostics(diagnostics: PantheonConfigDiagnostic[]): PantheonConfigDiagnostic[] {
+  return diagnostics.filter((diag, index, array) => array.findIndex((candidate) => (
+    candidate.severity === diag.severity
+    && candidate.path === diag.path
+    && candidate.message === diag.message
+    && candidate.source === diag.source
+  )) === index);
+}
+
+function joinConfigPath(parent: string, key: string): string {
+  return parent ? `${parent}.${key}` : key;
+}
+
+function lintUnknownKeys(
+  value: unknown,
+  allowedKeys: Set<string>,
+  diagnostics: PantheonConfigDiagnostic[],
+  source: string | undefined,
+  scope: string,
+): void {
+  if (!isObject(value)) return;
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      pushDiagnostic(diagnostics, "warning", joinConfigPath(scope, key), "Unknown config key; it will be ignored by Pantheon.", source);
+    }
+  }
+}
+
+function lintPathReference(
+  value: unknown,
+  diagnostics: PantheonConfigDiagnostic[],
+  source: string | undefined,
+  configPath: string,
+  kind: "file" | "module" | "schema" = "file",
+): void {
+  if (!isNonEmptyString(value)) return;
+  if (kind === "schema" && /^https?:\/\//i.test(value.trim())) return;
+  if (!existsFile(value.trim())) {
+    pushDiagnostic(diagnostics, kind === "schema" ? "warning" : "error", configPath, `${kind === "module" ? "Module" : kind === "schema" ? "Schema" : "File"} not found: ${value.trim()}`, source);
+  }
+}
+
+function lintEnumValue(
+  value: unknown,
+  allowed: string[],
+  diagnostics: PantheonConfigDiagnostic[],
+  source: string | undefined,
+  configPath: string,
+): void {
+  if (value === undefined) return;
+  if (!isNonEmptyString(value) || !allowed.includes(value.trim())) {
+    pushDiagnostic(diagnostics, "error", configPath, `Expected one of: ${allowed.join(", ")}.`, source);
+  }
+}
+
+function normalizeAdapterPolicyEntry(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "*" || trimmed === "!*") return undefined;
+  return trimmed.startsWith("!") ? trimmed.slice(1) : trimmed;
+}
+
+function lintAdapterIdList(
+  values: string[] | undefined,
+  diagnostics: PantheonConfigDiagnostic[],
+  source: string | undefined,
+  configPath: string,
+): void {
+  for (const value of values ?? []) {
+    const normalized = normalizeAdapterPolicyEntry(value);
+    if (!normalized || BUILT_IN_ADAPTER_IDS.has(normalized)) continue;
+    pushDiagnostic(diagnostics, "warning", configPath, `Unknown adapter id '${normalized}'. If this is intentional, ensure a custom adapter module provides it.`, source);
+  }
+}
+
+function lintConfigFragment(raw: RawObject, diagnostics: PantheonConfigDiagnostic[], source: string | undefined, scope = ""): void {
+  lintUnknownKeys(raw, TOP_LEVEL_CONFIG_KEYS, diagnostics, source, scope || "config");
+  lintPathReference(raw.$schema, diagnostics, source, joinConfigPath(scope || "config", "$schema"), "schema");
+
+  if (isObject(raw.agents)) {
+    for (const [agentName, agentValue] of Object.entries(raw.agents)) {
+      const agentPath = joinConfigPath(scope, `agents.${agentName}`);
+      lintUnknownKeys(agentValue, AGENT_OVERRIDE_KEYS, diagnostics, source, agentPath);
+      if (isObject(agentValue)) {
+        lintPathReference(agentValue.promptOverrideFile, diagnostics, source, `${agentPath}.promptOverrideFile`);
+        if (Array.isArray(agentValue.promptAppendFiles)) {
+          for (const [index, filePath] of agentValue.promptAppendFiles.entries()) {
+            lintPathReference(filePath, diagnostics, source, `${agentPath}.promptAppendFiles[${index}]`);
+          }
+        }
+        lintAdapterIdList(sanitizeStringArray(agentValue.allowedAdapters), diagnostics, source, `${agentPath}.allowedAdapters`);
+        lintAdapterIdList(sanitizeStringArray(agentValue.deniedAdapters), diagnostics, source, `${agentPath}.deniedAdapters`);
+      }
+    }
+  }
+
+  if (isObject(raw.council)) {
+    const councilPath = joinConfigPath(scope, "council");
+    lintUnknownKeys(raw.council, COUNCIL_KEYS, diagnostics, source, councilPath);
+    if (isObject(raw.council.presets)) {
+      for (const [presetName, presetValue] of Object.entries(raw.council.presets)) {
+        const presetPath = `${councilPath}.presets.${presetName}`;
+        lintUnknownKeys(presetValue, COUNCIL_PRESET_KEYS, diagnostics, source, presetPath);
+        if (isObject(presetValue)) {
+          const master = presetValue.master;
+          const councillors = presetValue.councillors;
+          if (isObject(master)) lintUnknownKeys(master, COUNCIL_MEMBER_KEYS, diagnostics, source, `${presetPath}.master`);
+          if (Array.isArray(councillors)) {
+            councillors.forEach((member: unknown, index: number) => lintUnknownKeys(member, COUNCIL_MEMBER_KEYS, diagnostics, source, `${presetPath}.councillors[${index}]`));
+          }
+        }
+      }
+    }
+  }
+
+  if (isObject(raw.fallback)) lintUnknownKeys(raw.fallback, FALLBACK_KEYS, diagnostics, source, joinConfigPath(scope, "fallback"));
+  if (isObject(raw.background)) lintUnknownKeys(raw.background, BACKGROUND_KEYS, diagnostics, source, joinConfigPath(scope, "background"));
+  if (isObject(raw.research)) lintUnknownKeys(raw.research, RESEARCH_KEYS, diagnostics, source, joinConfigPath(scope, "research"));
+  if (isObject(raw.delegation)) lintUnknownKeys(raw.delegation, DELEGATION_KEYS, diagnostics, source, joinConfigPath(scope, "delegation"));
+  if (isObject(raw.autoContinue)) lintUnknownKeys(raw.autoContinue, AUTO_CONTINUE_KEYS, diagnostics, source, joinConfigPath(scope, "autoContinue"));
+  if (isObject(raw.workflow)) lintUnknownKeys(raw.workflow, WORKFLOW_KEYS, diagnostics, source, joinConfigPath(scope, "workflow"));
+  if (isObject(raw.ui)) lintUnknownKeys(raw.ui, UI_KEYS, diagnostics, source, joinConfigPath(scope, "ui"));
+  if (isObject(raw.debug)) lintUnknownKeys(raw.debug, DEBUG_KEYS, diagnostics, source, joinConfigPath(scope, "debug"));
+
+  if (isObject(raw.multiplexer)) {
+    const multiplexerPath = joinConfigPath(scope, "multiplexer");
+    lintUnknownKeys(raw.multiplexer, MULTIPLEXER_KEYS, diagnostics, source, multiplexerPath);
+    lintEnumValue(raw.multiplexer.splitDirection, ["vertical", "horizontal"], diagnostics, source, `${multiplexerPath}.splitDirection`);
+    lintEnumValue(raw.multiplexer.layout, ["tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical"], diagnostics, source, `${multiplexerPath}.layout`);
+  }
+
+  if (isObject(raw.skills)) {
+    const skillsPath = joinConfigPath(scope, "skills");
+    lintUnknownKeys(raw.skills, SKILLS_KEYS, diagnostics, source, skillsPath);
+    if (isObject(raw.skills.cartography)) lintUnknownKeys(raw.skills.cartography, CARTOGRAPHY_KEYS, diagnostics, source, `${skillsPath}.cartography`);
+  }
+
+  if (isObject(raw.adapters)) {
+    const adaptersPath = joinConfigPath(scope, "adapters");
+    lintUnknownKeys(raw.adapters, ADAPTER_KEYS, diagnostics, source, adaptersPath);
+    lintAdapterIdList(sanitizeStringArray(raw.adapters.disabled), diagnostics, source, `${adaptersPath}.disabled`);
+    lintAdapterIdList(sanitizeStringArray(raw.adapters.defaultAllow), diagnostics, source, `${adaptersPath}.defaultAllow`);
+    lintAdapterIdList(sanitizeStringArray(raw.adapters.defaultDeny), diagnostics, source, `${adaptersPath}.defaultDeny`);
+    if (Array.isArray(raw.adapters.modules)) {
+      raw.adapters.modules.forEach((modulePath, index) => lintPathReference(modulePath, diagnostics, source, `${adaptersPath}.modules[${index}]`, "module"));
+    }
+  }
+
+  if (isObject(raw.presets)) {
+    for (const [presetName, presetValue] of Object.entries(raw.presets)) {
+      if (!isObject(presetValue)) continue;
+      lintConfigFragment(presetValue, diagnostics, source, joinConfigPath(scope, `presets.${presetName}`));
+    }
   }
 }
 
@@ -497,6 +742,9 @@ function getDefaultConfig(): PantheonConfig {
       pollIntervalMs: 3000,
       logDir: path.join(getAgentDir(), "oh-my-opencode-pi-tasks"),
       maxConcurrent: 2,
+      reuseSessions: true,
+      heartbeatIntervalMs: 1500,
+      staleAfterMs: 20000,
     },
     multiplexer: {
       tmux: false,
@@ -506,6 +754,7 @@ function getDefaultConfig(): PantheonConfig {
       keepPaneOnFinish: false,
       reuseWindow: true,
       windowName: "pantheon-bg",
+      projectScopedWindow: true,
     },
     research: {
       timeoutMs: 15000,
@@ -543,9 +792,6 @@ function getDefaultConfig(): PantheonConfig {
       autoEnable: false,
       autoEnableThreshold: 4,
     },
-    interview: {
-      templateTitle: "Project Specification",
-    },
     workflow: {
       injectHints: true,
       backgroundAwareness: true,
@@ -577,6 +823,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     return {
       config,
       warnings,
+      diagnostics: [],
       sources: { globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.json"), projectPath: null },
       activePresets: [],
       availablePresets: Object.keys(DEFAULT_CONFIG_PRESETS),
@@ -635,6 +882,13 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     if (typeof input.background.maxConcurrent === "number" && Number.isFinite(input.background.maxConcurrent) && input.background.maxConcurrent >= 1) {
       config.background!.maxConcurrent = Math.floor(input.background.maxConcurrent);
     }
+    if (typeof input.background.reuseSessions === "boolean") config.background!.reuseSessions = input.background.reuseSessions;
+    if (typeof input.background.heartbeatIntervalMs === "number" && Number.isFinite(input.background.heartbeatIntervalMs) && input.background.heartbeatIntervalMs >= 250) {
+      config.background!.heartbeatIntervalMs = Math.floor(input.background.heartbeatIntervalMs);
+    }
+    if (typeof input.background.staleAfterMs === "number" && Number.isFinite(input.background.staleAfterMs) && input.background.staleAfterMs >= 1000) {
+      config.background!.staleAfterMs = Math.floor(input.background.staleAfterMs);
+    }
     if (isNonEmptyString(input.background.logDir)) config.background!.logDir = input.background.logDir.trim();
   }
 
@@ -650,6 +904,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     if (typeof input.multiplexer.keepPaneOnFinish === "boolean") config.multiplexer!.keepPaneOnFinish = input.multiplexer.keepPaneOnFinish;
     if (typeof input.multiplexer.reuseWindow === "boolean") config.multiplexer!.reuseWindow = input.multiplexer.reuseWindow;
     if (isNonEmptyString(input.multiplexer.windowName)) config.multiplexer!.windowName = input.multiplexer.windowName.trim();
+    if (typeof input.multiplexer.projectScopedWindow === "boolean") config.multiplexer!.projectScopedWindow = input.multiplexer.projectScopedWindow;
   }
 
   if (isObject(input.research)) {
@@ -709,10 +964,6 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     if (typeof input.autoContinue.autoEnableThreshold === "number" && Number.isFinite(input.autoContinue.autoEnableThreshold) && input.autoContinue.autoEnableThreshold >= 1) {
       config.autoContinue!.autoEnableThreshold = Math.floor(input.autoContinue.autoEnableThreshold);
     }
-  }
-
-  if (isObject(input.interview)) {
-    if (isNonEmptyString(input.interview.templateTitle)) config.interview!.templateTitle = input.interview.templateTitle.trim();
   }
 
   if (isObject(input.workflow)) {
@@ -786,6 +1037,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
   return {
     config,
     warnings,
+    diagnostics: [],
     sources: {
       globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.json"),
       projectPath: null,
@@ -797,6 +1049,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
 
 export function loadPantheonConfig(cwd: string): PantheonConfigLoadResult {
   const warnings: string[] = [];
+  const diagnostics: PantheonConfigDiagnostic[] = [];
   const globalPath = findFirstExistingPath([
     path.join(getAgentDir(), "oh-my-opencode-pi.json"),
     path.join(getAgentDir(), "oh-my-opencode-pi.jsonc"),
@@ -808,6 +1061,8 @@ export function loadPantheonConfig(cwd: string): PantheonConfigLoadResult {
 
   const globalConfig = globalPath ? loadJsoncFile(globalPath, warnings) : {};
   const projectConfig = projectPath ? loadJsoncFile(projectPath, warnings) : {};
+  if (globalPath) lintConfigFragment(globalConfig, diagnostics, globalPath);
+  if (projectPath) lintConfigFragment(projectConfig, diagnostics, projectPath);
 
   const globalPresetMap = {
     ...cloneUnknown(DEFAULT_CONFIG_PRESETS),
@@ -823,7 +1078,16 @@ export function loadPantheonConfig(cwd: string): PantheonConfigLoadResult {
 
   const merged = deepMerge(globalResolved.config, projectResolved.config);
   const result = validatePantheonConfig(merged);
-  result.warnings = [...warnings, ...result.warnings].filter((item, index, array) => array.indexOf(item) === index);
+  const mergedDiagnostics = dedupeDiagnostics([
+    ...diagnostics,
+    ...result.warnings.map((message) => ({ severity: "warning" as const, path: "config", message })),
+  ]);
+  result.diagnostics = mergedDiagnostics;
+  result.warnings = [
+    ...warnings,
+    ...result.warnings,
+    ...mergedDiagnostics.map(formatDiagnostic),
+  ].filter((item, index, array) => array.indexOf(item) === index);
   result.sources.globalPath = globalPath ?? path.join(getAgentDir(), "oh-my-opencode-pi.json");
   result.sources.projectPath = projectPath;
   result.activePresets = [...globalResolved.activePresets, ...projectResolved.activePresets].filter((item, index, array) => array.indexOf(item) === index);

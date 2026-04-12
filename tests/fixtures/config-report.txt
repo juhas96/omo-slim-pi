@@ -1,0 +1,49 @@
+Pantheon config report
+
+Sources:
+- Global config: /tmp/global.jsonc
+- Project config: /tmp/project/.pi/oh-my-opencode-pi.jsonc
+
+Presets:
+- Active presets: durable
+- Available presets: default, durable, fast, research
+- Council presets: default
+
+Workflow & UI:
+- Dashboard widget: enabled
+- Workflow hints: enabled
+- Persist todos: enabled
+- Auto-continue: disabled
+- Max continuations: 5
+
+Background & multiplexer:
+- Background tasks: enabled
+- Max concurrent: 2
+- Reuse sessions: enabled
+- Heartbeat interval: 1500ms
+- Stale after: 20000ms
+- tmux integration: disabled
+- Project-scoped window: enabled
+
+Skills & adapters:
+- Default skill allow: cartography
+- Default skill deny: (none)
+- Cartography: enabled
+- Adapter default allow: docs-context7
+- Adapter default deny: github-releases
+- Disabled adapters: grep-app
+
+Agents:
+- fixer
+- explorer
+
+Diagnostics:
+- [warning] config.mystery (/tmp/demo.jsonc) — Unknown config key; it will be ignored by Pantheon.
+
+Warnings:
+- Config parse warning in /tmp/demo.jsonc: 1 JSONC parse issue detected.
+
+Suggested next steps:
+- Use /pantheon-adapters to inspect the effective adapter allowlist for the current session.
+- Use /pantheon-adapter-health before relying on external research sources.
+- Use /pantheon-runtime or /pantheon-hooks when behavior does not match expectations.

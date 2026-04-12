@@ -104,7 +104,7 @@ function renderPolicyPrompt(cwd: string, agentName: string): string | undefined 
   if (skillPolicy.allow.length > 0) lines.push(`Allowed skills: ${skillPolicy.allow.join(", ")}.`);
   if (skillPolicy.deny.length > 0) lines.push(`Disallowed skills: ${skillPolicy.deny.join(", ")}.`);
   if (skillPolicy.cartographyEnabled && (skillPolicy.allow.length === 0 || skillPolicy.allow.includes("cartography"))) {
-    lines.push("Use pantheon_repo_map for repository reconnaissance and pantheon_code_map for semantic import/symbol mapping when a task depends on structure, entry points, or file relationships.");
+    lines.push("Prefer the bundled cartography skill for repository mapping and codemap maintenance. When doing cartography work, use pantheon_repo_map for filesystem reconnaissance and pantheon_code_map for semantic import/symbol mapping.");
   }
 
   if (adapterPolicy.disableAll) {

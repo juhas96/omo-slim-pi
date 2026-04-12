@@ -1,0 +1,45 @@
+Scenario: doctor-config-diagnostics
+Pantheon command output
+Command: /pantheon-doctor
+Status: error
+Summary: Pantheon doctor found issues
+
+Output:
+Pantheon doctor report
+
+Workspace: <PROJECT_DIR>
+Config diagnostics: 3 (1 errors, 2 warnings)
+Adapter health checks: 7 (2 attention needed)
+Background task dir: ready — <BACKGROUND_DIR>
+Debug dir: ready — <DEBUG_DIR>
+Workflow state file: not yet created — <WORKFLOW_STATE>
+tmux available: <detected>
+inside tmux: <detected>
+Known background tasks: 0
+
+Checks:
+- Config: error
+- Adapters: warning
+- Multiplexer: warning
+- Background storage: ok
+- Debug artifacts: ok
+
+Config diagnostics:
+- [warning] config.mystery (<PROJECT_DIR>/.pi/oh-my-opencode-pi.jsonc) — Unknown config key; it will be ignored by Pantheon.
+- [warning] config.$schema (<PROJECT_DIR>/.pi/oh-my-opencode-pi.jsonc) — Schema not found: <PROJECT_DIR>/missing-schema.json
+- [error] multiplexer.layout (<PROJECT_DIR>/.pi/oh-my-opencode-pi.jsonc) — Expected one of: tiled, even-horizontal, even-vertical, main-horizontal, main-vertical.
+
+Adapter health:
+- docs-context7 [ok] auth=not-required — Docs resolution is available without extra authentication.
+- local-docs [ok] auth=not-required — Repository-local docs are available for fast lookup.
+- grep-app [ok] auth=not-required — Public code-search fallback is available.
+- github-releases [warn] auth=missing — GitHub token not configured; release lookup may be rate-limited.
+- github-code-search [warn] auth=missing — GitHub token not configured; code search may be rate-limited.
+- npm-registry [ok] auth=not-required — npm metadata and README lookup is available.
+- web-search [ok] auth=not-required — Generic web-search fallback is available.
+
+Suggested next steps:
+- Fix config errors first, then rerun /pantheon-doctor.
+- Review /pantheon-config for merged config details and warning context.
+- Start pi inside tmux to use /pantheon-attach and shared background panes.
+- Run /pantheon-adapter-health for focused adapter readiness details.

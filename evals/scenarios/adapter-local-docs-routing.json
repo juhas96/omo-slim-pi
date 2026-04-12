@@ -1,0 +1,15 @@
+{
+  "id": "adapter-local-docs-routing",
+  "title": "Adapter auto-selection prefers local docs for repo documentation queries",
+  "workflow": "adapter-search",
+  "description": "A generic web-search baseline would miss repository-local documentation, while Pantheon adapter orchestration should route repo-docs queries to local-docs first and explain that choice.",
+  "tags": ["adapters", "routing", "local-docs"],
+  "baseline": {
+    "label": "generic-web-search",
+    "status": "failed",
+    "durationMs": 180,
+    "attempts": 1,
+    "qualityScore": 0.2,
+    "notes": ["Generic search did not prioritize repository-local docs.", "Selection reasoning was not surfaced."]
+  }
+}

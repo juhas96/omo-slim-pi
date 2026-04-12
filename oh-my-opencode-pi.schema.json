@@ -126,7 +126,10 @@
         "enabled": { "type": "boolean", "default": true },
         "pollIntervalMs": { "type": "number", "default": 3000 },
         "logDir": { "type": "string" },
-        "maxConcurrent": { "type": "number", "default": 2 }
+        "maxConcurrent": { "type": "number", "default": 2 },
+        "reuseSessions": { "type": "boolean", "default": true },
+        "heartbeatIntervalMs": { "type": "number", "default": 1500 },
+        "staleAfterMs": { "type": "number", "default": 20000 }
       }
     },
     "multiplexer": {
@@ -147,7 +150,8 @@
         "focusOnSpawn": { "type": "boolean", "default": false },
         "keepPaneOnFinish": { "type": "boolean", "default": false },
         "reuseWindow": { "type": "boolean", "default": true },
-        "windowName": { "type": "string", "default": "pantheon-bg" }
+        "windowName": { "type": "string", "default": "pantheon-bg" },
+        "projectScopedWindow": { "type": "boolean", "default": true }
       }
     },
     "research": {
@@ -208,13 +212,6 @@
         "maxContinuations": { "type": "number", "default": 5 },
         "autoEnable": { "type": "boolean", "default": false },
         "autoEnableThreshold": { "type": "number", "default": 4 }
-      }
-    },
-    "interview": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "templateTitle": { "type": "string", "default": "Project Specification" }
       }
     },
     "workflow": {

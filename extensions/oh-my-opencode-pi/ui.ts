@@ -15,7 +15,9 @@ function previewText(text: string, max = 180): string {
 }
 
 function themeAccent(ctx: ExtensionContext, text: string): string {
-  return ctx.ui.theme.fg("accent", ctx.ui.theme.bold(text));
+  const fg = ctx.ui?.theme?.fg?.bind(ctx.ui.theme) ?? ((_color: string, value: string) => value);
+  const bold = ctx.ui?.theme?.bold?.bind(ctx.ui.theme) ?? ((value: string) => value);
+  return fg("accent", bold(text));
 }
 
 export function getTaskStateChip(status: BackgroundTaskRecord["status"], theme: RenderTheme): string {
@@ -73,6 +75,70 @@ export function renderWorkflowToolResult(
   return new Text(`${theme.fg("toolTitle", theme.bold(toolName))} ${theme.fg("accent", title)}\n${body}`, 0, 0);
 }
 
+export type CommandOutputStatus = "success" | "warning" | "error";
+
+export function getCommandStatusColor(status: CommandOutputStatus): "success" | "warning" | "error" {
+  return status === "success" ? "success" : status === "error" ? "error" : "warning";
+}
+
+export function getCommandStatusLabel(status: CommandOutputStatus): string {
+  return status === "success" ? "✓ SUCCESS" : status === "error" ? "✖ ERROR" : "▲ WARNING";
+}
+
+export function buildPantheonStatusBanner(theme: RenderTheme, status: CommandOutputStatus, title: string): string {
+  return theme.fg(getCommandStatusColor(status), theme.bold(`━━━ ${getCommandStatusLabel(status)} · ${title.toUpperCase()} ━━━`));
+}
+
+function firstMeaningfulLine(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) ?? "(no output)";
+}
+
+export function formatPantheonCommandOutput(
+  command: string,
+  body: string,
+  options?: { status?: CommandOutputStatus; summary?: string },
+): string {
+  const status = options?.status ?? "success";
+  const summary = options?.summary?.trim();
+  const output = body.trim() || "(no output)";
+  return [
+    "Pantheon command output",
+    `Command: ${command}`,
+    `Status: ${status}`,
+    summary ? `Summary: ${summary}` : undefined,
+    "",
+    "Output:",
+    output,
+  ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
+export function buildPantheonCommandOutputLines(
+  ctx: ExtensionContext,
+  command: string,
+  body: string,
+  options?: { status?: CommandOutputStatus; summary?: string },
+): string[] {
+  const fg = ctx.ui?.theme?.fg?.bind(ctx.ui.theme) ?? ((_color: string, text: string) => text);
+  const bold = ctx.ui?.theme?.bold?.bind(ctx.ui.theme) ?? ((text: string) => text);
+  const status = options?.status ?? "success";
+  const statusColor = getCommandStatusColor(status);
+  const statusLabel = getCommandStatusLabel(status);
+  const summary = options?.summary?.trim();
+  const outputPreview = firstMeaningfulLine(body);
+  const lines = [
+    buildPantheonStatusBanner({ fg, bold }, status, "Pantheon command output"),
+    `${fg("toolTitle", bold(command))} ${fg(statusColor, bold(`• ${statusLabel}`))}`,
+    summary ? fg(statusColor, bold(previewText(summary, 120))) : fg("accent", previewText(outputPreview, 120)),
+  ];
+  if (!summary || previewText(summary, 120) !== previewText(outputPreview, 120)) {
+    lines.push(`${fg("accent", bold("Output preview:"))} ${fg("accent", previewText(outputPreview, 120))}`);
+  }
+  return lines;
+}
+
 export function buildPantheonDashboardLines(
   ctx: ExtensionContext,
   config: PantheonConfig,
@@ -81,6 +147,8 @@ export function buildPantheonDashboardLines(
   autoContinueEnabled: boolean,
   configWarnings: number,
 ): string[] {
+  const fg = ctx.ui?.theme?.fg?.bind(ctx.ui.theme) ?? ((_color: string, value: string) => value);
+  const bold = ctx.ui?.theme?.bold?.bind(ctx.ui.theme) ?? ((value: string) => value);
   const counts = getBackgroundStatusCounts(tasks);
   const activeTasks = tasks.filter((task) => task.status === "queued" || task.status === "running");
   const maxTodos = Math.max(1, config.ui?.maxTodos ?? 3);
@@ -89,27 +157,28 @@ export function buildPantheonDashboardLines(
 
   const chips = [
     themeAccent(ctx, "Pantheon"),
-    counts.running > 0 ? ctx.ui.theme.fg("warning", `${counts.running} running`) : undefined,
-    counts.queued > 0 ? ctx.ui.theme.fg("muted", `${counts.queued} queued`) : undefined,
-    counts.failed + counts.cancelled > 0 ? ctx.ui.theme.fg("error", `${counts.failed + counts.cancelled} trouble`) : undefined,
-    state.uncheckedTodos.length > 0 ? ctx.ui.theme.fg("accent", `${state.uncheckedTodos.length} todos`) : undefined,
-    autoContinueEnabled ? ctx.ui.theme.fg("success", "auto on") : ctx.ui.theme.fg("dim", "auto off"),
-    configWarnings > 0 ? ctx.ui.theme.fg("warning", `${configWarnings} warning${configWarnings === 1 ? "" : "s"}`) : undefined,
+    counts.running > 0 ? fg("warning", `${counts.running} running`) : undefined,
+    counts.queued > 0 ? fg("muted", `${counts.queued} queued`) : undefined,
+    counts.stale > 0 ? fg("warning", `${counts.stale} stale`) : undefined,
+    counts.failed + counts.cancelled > 0 ? fg("error", `${counts.failed + counts.cancelled} trouble`) : undefined,
+    state.uncheckedTodos.length > 0 ? fg("accent", `${state.uncheckedTodos.length} todos`) : undefined,
+    autoContinueEnabled ? fg("success", "auto on") : fg("dim", "auto off"),
+    configWarnings > 0 ? fg("warning", `${configWarnings} warning${configWarnings === 1 ? "" : "s"}`) : undefined,
   ].filter((item): item is string => Boolean(item));
-  if (chips.length > 0) lines.push(chips.join(ctx.ui.theme.fg("dim", " • ")));
+  if (chips.length > 0) lines.push(chips.join(fg("dim", " • ")));
 
   for (const task of activeTasks.slice(0, maxBackgroundTasks)) {
-    lines.push(`${getTaskStateChip(task.status, { fg: ctx.ui.theme.fg.bind(ctx.ui.theme), bold: ctx.ui.theme.bold.bind(ctx.ui.theme) })} ${ctx.ui.theme.fg("accent", task.agent)} ${ctx.ui.theme.fg("dim", task.id)} ${ctx.ui.theme.fg("muted", previewText(task.summary ?? task.task, 70))}`);
+    lines.push(`${getTaskStateChip(task.status, { fg, bold })} ${fg("accent", task.agent)} ${fg("dim", task.id)} ${fg("muted", previewText(task.summary ?? task.task, 70))}`);
   }
   if (activeTasks.length > maxBackgroundTasks) {
-    lines.push(ctx.ui.theme.fg("dim", `… +${activeTasks.length - maxBackgroundTasks} more active background task${activeTasks.length - maxBackgroundTasks === 1 ? "" : "s"}`));
+    lines.push(fg("dim", `… +${activeTasks.length - maxBackgroundTasks} more active background task${activeTasks.length - maxBackgroundTasks === 1 ? "" : "s"}`));
   }
 
   for (const todo of state.uncheckedTodos.slice(0, maxTodos)) {
-    lines.push(`${ctx.ui.theme.fg("muted", "☐")} ${previewText(todo, 96)}`);
+    lines.push(`${fg("muted", "☐")} ${previewText(todo, 96)}`);
   }
   if (state.uncheckedTodos.length > maxTodos) {
-    lines.push(ctx.ui.theme.fg("dim", `… +${state.uncheckedTodos.length - maxTodos} more persisted todo${state.uncheckedTodos.length - maxTodos === 1 ? "" : "s"}`));
+    lines.push(fg("dim", `… +${state.uncheckedTodos.length - maxTodos} more persisted todo${state.uncheckedTodos.length - maxTodos === 1 ? "" : "s"}`));
   }
 
   return lines;

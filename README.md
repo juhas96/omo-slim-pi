@@ -1,109 +1,133 @@
-# oh-my-opencode-pi
+<div align="center">
+  <h1>oh-my-opencode-pi</h1>
+  <p><i>Pantheon-style multi-agent orchestration for pi.</i></p>
+  <p>
+    <img src="https://img.shields.io/badge/pi-package-6C47FF?style=for-the-badge" alt="pi package">&nbsp;
+    <img src="https://img.shields.io/badge/Pantheon-multi--agent-111111?style=for-the-badge" alt="Pantheon multi-agent">&nbsp;
+    <img src="https://img.shields.io/badge/docs-upstream--style-0A7EA4?style=for-the-badge" alt="docs upstream style">
+  </p>
+  <p><b>Pi-native Pantheon port</b> · specialist delegation · council synthesis · background execution · repo cartography</p>
+  <p><sub>Inspired by <a href="https://github.com/alvinunreal/oh-my-opencode-slim"><code>oh-my-opencode-slim</code></a>, adapted for pi's runtime, hooks, tools, and extension model.</sub></p>
+</div>
 
-Pantheon-style multi-agent orchestration for pi, inspired by [`oh-my-opencode-slim`](https://github.com/alvinunreal/oh-my-opencode-slim).
+---
 
-## What this port includes
+## 📦 Installation
 
-This pi package ports the core ideas that make oh-my-opencode-slim useful:
+### Quick start
 
-- an **orchestrator-style system prompt** automatically appended in top-level pi sessions
-- a **Pantheon delegation tool** for isolated specialist subagents
-- specialist agents modeled after **Explorer, Librarian, Oracle, Designer, Fixer, and Council**
-- a **Council tool** that runs parallel councillors and synthesizes with a council master
-- **custom tool renderers** for Pantheon delegation and council calls/results inside pi
-- **background specialist tasks** with status lookup, result retrieval, waiting, and retry
-- **model fallback chains** for specialists and council master
-- **richer tmux integration** for background task logs and pane attach/reopen
-- **external research tools** for the Librarian (`pantheon_fetch`, `pantheon_search`, `pantheon_github_file`, `pantheon_github_releases`, `pantheon_npm_info`, `pantheon_package_docs`)
-- **repo cartography / codemap support** via `pantheon_repo_map` and `pantheon_code_map`
-- **structured research adapters** via `pantheon_adapter_list`, `pantheon_adapter_search`, and `pantheon_adapter_fetch`
-- **agent-mode UX helpers** like `/pantheon-as`
-- **polished TUI command-center UI** for `/pantheon` and interactive selectors
-- **compact Pantheon dashboard widget** below the editor for active work context
-- **auto-continue workflow** for unchecked todo lists
-- **interview/spec generation** via command and tool
-- **workflow hints / orchestration nudges** for better specialist routing
-- **persisted workflow state** for carrying unchecked todos across turns
-- **interactive commands/UI helpers**:
-  - `/pantheon`
-  - `/pantheon-agents`
-  - `/pantheon-council`
-  - `/pantheon-config`
-- **config validation** with runtime warnings
-- a **tolerant edit rescue hook** for pi's `edit` tool when exact `oldText` misses only because of newline/whitespace normalization drift
-- workflow prompt templates:
-  - `/implement`
-  - `/scout-and-plan`
-  - `/implement-and-review`
-  - `/ask-council`
-
-## What is intentionally not ported
-
-Some oh-my-opencode-slim features are OpenCode-specific and do not map cleanly to pi without much deeper runtime surgery. This port does **not** currently replicate:
-
-- OpenCode agent registry integration
-- OpenCode hook/event interception semantics
-- `apply_patch` rescue hook
-- full MCP parity with every OpenCode integration surface (this port now includes a Pi-native adapter layer with Context7-like docs and grep.app-like code search, but not every original integration)
-- background OpenCode session orchestration / tmux multiplexer integration
-- interview web UI flow
-- OpenCode installer/config mutation
-
-Those can be added later as separate pi extensions, but they are not required for a useful first-class pi port.
-
-## Release / package setup
-
-This repo is now structured as a real pi package.
-
-Included:
-- `package.json` with `pi` manifest
-- `LICENSE`
-- `tsconfig.json`
-- `oh-my-opencode-pi.schema.json`
-- publish-ready `files` list
-- scripts:
-  - `npm run typecheck`
-  - `npm run pack:dry`
-
-If you want to publish:
-
-```bash
-npm publish
-```
-
-## Install
-
-### Project-local
+Project-local install:
 
 ```bash
 pi install -l /absolute/path/to/oh-my-opencode-pi
 ```
 
-### Global
+Global install:
 
 ```bash
 pi install /absolute/path/to/oh-my-opencode-pi
 ```
 
-Or publish it and install from git/npm as a normal pi package.
+Standalone installer / bootstrap CLI:
 
-## Usage
+The generated config includes explicit OpenAI defaults for delegated specialists and a `review-board` council preset. The top-level pi session model still comes from pi itself.
 
-After install, start `pi` in your project. The main agent behaves like an orchestrator and can call these tools automatically:
 
-- `pantheon_delegate`
-- `pantheon_council`
+```bash
+node ./bin/oh-my-opencode-pi.mjs install --cwd /path/to/project --tmux=yes --skills=yes
+node ./bin/oh-my-opencode-pi.mjs verify --cwd /path/to/project
+```
 
-You can also use the bundled prompts:
+When installed from npm, the `oh-my-opencode-pi` binary is available directly.
 
-- `/implement add retry logic to the API client`
-- `/scout-and-plan refactor auth boundaries`
-- `/implement-and-review improve dashboard filters`
-- `/ask-council should we move this module behind an event bus?`
+### ✅ Verify your setup
 
-## Available Pantheon agents
+Open `pi` in the target project, then run:
 
-List them in-session with:
+```text
+/pantheon
+/pantheon-agents
+/pantheon-config
+/pantheon-runtime
+```
+
+If those commands resolve, the extension is loaded and the Pantheon surface is available.
+
+### Detailed guides
+
+- [Installation Guide](docs/installation.md)
+- [Provider Configurations](docs/provider-configurations.md)
+- [Configuration Reference](docs/configuration.md)
+- [Quick Reference](docs/quick-reference.md)
+
+---
+
+## 🏛️ Meet the Pantheon
+
+### 01. Orchestrator — The Embodiment of Order
+
+| Field | Details |
+|------|---------|
+| **Role** | Master delegator and strategic coordinator |
+| **Prompt** | [`agents/orchestrator.md`](agents/orchestrator.md) |
+| **Behavior** | Appends top-level orchestration guidance, chooses when to act directly, delegate, use council, or launch background work |
+| **Best at** | Routing, sequencing, balancing speed/quality/cost |
+
+### 02. Explorer — The Eternal Wanderer
+
+| Field | Details |
+|------|---------|
+| **Role** | Codebase reconnaissance |
+| **Prompt** | [`agents/explorer.md`](agents/explorer.md) |
+| **Best at** | Finding files, summarizing architecture, locating patterns, mapping unfamiliar areas |
+| **Ideal tools** | `read`, `bash`, `pantheon_repo_map`, `pantheon_code_map` |
+
+### 03. Oracle — The Guardian of Paths
+
+| Field | Details |
+|------|---------|
+| **Role** | Strategic advisor and debugger of last resort |
+| **Prompt** | [`agents/oracle.md`](agents/oracle.md) |
+| **Best at** | Risky decisions, architecture review, simplification, hard debugging |
+| **When to use** | Expensive-to-reverse choices and persistent bugs |
+
+### 04. Council — The Chorus of Minds
+
+| Field | Details |
+|------|---------|
+| **Role** | Multi-model consensus and synthesis |
+| **Prompt** | [`agents/council.md`](agents/council.md) |
+| **Guide** | [`docs/council.md`](docs/council.md) |
+| **Best at** | Ambiguous trade-offs, high-confidence review, architecture verdicts |
+
+### 05. Librarian — The Weaver of Knowledge
+
+| Field | Details |
+|------|---------|
+| **Role** | External knowledge retrieval |
+| **Prompt** | [`agents/librarian.md`](agents/librarian.md) |
+| **Best at** | Docs lookup, package research, release notes, upstream examples |
+| **Research surface** | Fetch/search tools plus the adapter system documented in [`docs/mcps.md`](docs/mcps.md) |
+
+### 06. Designer — The Guardian of Aesthetics
+
+| Field | Details |
+|------|---------|
+| **Role** | UI/UX implementation and review |
+| **Prompt** | [`agents/designer.md`](agents/designer.md) |
+| **Best at** | Interface polish, interaction quality, visual cleanup, frontend ergonomics |
+| **When to use** | User-facing work where presentation quality matters |
+
+### 07. Fixer — The Last Builder
+
+| Field | Details |
+|------|---------|
+| **Role** | Fast implementation specialist |
+| **Prompt** | [`agents/fixer.md`](agents/fixer.md) |
+| **Best at** | Focused execution, bounded code changes, tests, follow-through after planning |
+| **When to use** | Requirements are clear and the work is implementation-heavy |
+
+### Available agents in-session
 
 ```text
 /pantheon-agents
@@ -118,6 +142,102 @@ Bundled agents:
 - `fixer`
 - `council`
 - internal: `councillor`, `council-master`
+
+---
+
+## 📚 Documentation
+
+### 🚀 Getting started
+
+| Doc | Contents |
+|-----|----------|
+| [Installation Guide](docs/installation.md) | `pi install`, installer CLI, bootstrap flow, verification, troubleshooting |
+| [Provider Configurations](docs/provider-configurations.md) | Pi model strings, mixed-provider presets, per-agent overrides, council diversity |
+| [Quick Reference](docs/quick-reference.md) | Docs index and suggested reading order |
+
+### ✨ Features
+
+| Feature | Doc | What it covers |
+|---------|-----|----------------|
+| **Council** | [council.md](docs/council.md) | Multi-model consensus, presets, timeouts, and when to use `pantheon_council` |
+| **Multiplexer Integration** | [multiplexer-integration.md](docs/multiplexer-integration.md) | Tmux-backed background panes, layout, attach/reuse, troubleshooting |
+| **Cartography Skill** | [cartography.md](docs/cartography.md) | Hierarchical codemap generation and incremental repo mapping |
+| **Interview / Spec Workflow** | [interview.md](docs/interview.md) | Upstream parity note and the pi-native spec workflow replacement |
+
+### ⚙️ Config & reference
+
+| Doc | Contents |
+|-----|----------|
+| [Configuration](docs/configuration.md) | Config files, merge order, presets, overrides, schema usage |
+| [Skills](docs/skills.md) | Bundled cartography skill, policy controls, setup hints |
+| [MCPs / Adapters](docs/mcps.md) | Pi-native adapter system that fills the role upstream MCP docs cover |
+| [Tools](docs/tools.md) | Background tasks, LSP, AST-grep, formatting, patch rescue, observability |
+| [Runtime Parity](docs/runtime-parity.md) | What maps cleanly from upstream and where pi still differs |
+| [Author-style Preset](docs/authors-preset.md) | A practical mixed-provider preset for day-to-day Pantheon usage |
+| [Repository Codemap](codemap.md) | Top-level architecture map for future contributors and agents |
+
+---
+
+## ✨ What this port includes
+
+This pi package ports the most valuable `oh-my-opencode-slim` ideas into pi's native extension model:
+
+- orchestrator-style top-level prompt injection
+- specialist delegation via `pantheon_delegate`
+- multi-model consensus via `pantheon_council`
+- background specialist tasks with status, wait, result, retry, cancel, and attach flows
+- tmux-backed multiplexer support for live background logs
+- structured research through adapters and docs-aware fetch/search helpers
+- cartography / codemap workflows via a bundled `cartography` skill
+- workflow-state persistence, auto-continue, and resume helpers
+- richer code intelligence: LSP navigation, rename, organize-imports, format, patch, AST-grep
+- debug traces, runtime inspection, hook tracing, and usage statistics
+- prompt templates and review helpers: `/implement`, `/scout-and-plan`, `/implement-and-review`, `/ask-council`, `/review`
+
+## 📦 Package / release setup
+
+This repository is structured as a publishable pi package.
+
+Included:
+
+- `package.json` with the `pi` manifest
+- `agents/`, `prompts/`, `skills/`, `extensions/`, and `bin/`
+- `oh-my-opencode-pi.schema.json`
+- publish-ready `files` entries including `docs/` and `codemap.md`
+- package scripts:
+  - `npm run typecheck`
+  - `npm run pack:dry`
+  - `npm run eval:orchestration`
+
+Recommended validation cadence:
+
+- fast PR-safe orchestration check:
+  - `npm test -- tests/orchestration-evals.test.ts tests/orchestration-approval.test.ts tests/orchestration.test.ts tests/ui-rendering-approval.test.ts`
+- fuller release / milestone validation:
+  - `npm test`
+  - `npm run typecheck`
+  - `npm run eval:orchestration`
+  - `npm run pack:dry`
+
+To publish:
+
+```bash
+npm publish
+```
+
+## 🔎 Pi port / parity note
+
+This is not a byte-for-byte runtime clone of OpenCode.
+
+Some upstream behavior remains runtime-bound, especially:
+
+- OpenCode agent registry integration
+- exact OpenCode hook/interception semantics
+- exact `apply_patch` rescue semantics
+- full MCP runtime parity
+- exact detached-session lifecycle behavior
+
+For the detailed version, see [`docs/runtime-parity.md`](docs/runtime-parity.md).
 
 ## Overriding agents
 
@@ -136,502 +256,142 @@ Create one of these files:
 - global: `~/.pi/agent/oh-my-opencode-pi.json` or `~/.pi/agent/oh-my-opencode-pi.jsonc`
 - project: `.pi/oh-my-opencode-pi.json` or `.pi/oh-my-opencode-pi.jsonc`
 
-Both JSON and JSONC are supported. JSONC is useful when you want comments or trailing commas.
+Both JSON and JSONC are supported.
 
-Example:
+Minimal example:
 
 ```jsonc
 {
   "$schema": "./oh-my-opencode-pi.schema.json",
-
-  // Apply built-in and/or user-defined top-level config presets first
   "extends": ["research", "durable"],
-
-  // Project-local overrides still win after presets are applied
-  "appendOrchestratorPrompt": true,
-
   "agents": {
+    "oracle": { "model": "anthropic/claude-sonnet-4-5", "variant": "high" },
     "explorer": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "variant": "high",
-      "options": ["--tools", "read,bash"],
-      "promptAppendText": "Prefer reconnaissance before broad implementation.",
-      "promptAppendFiles": ["./prompts/explorer-project-notes.md"],
+      "model": "openai/gpt-4.1-mini",
       "allowSkills": ["cartography"],
-      "allowedAdapters": ["docs-context7", "grep-app", "web-search"]
+      "allowedAdapters": ["local-docs", "github-code-search", "web-search"]
     },
-    "fixer": {
-      "model": "openai/gpt-4.1",
-      "promptOverrideFile": "./prompts/fixer-override.md",
-      "deniedAdapters": ["grep-app"]
+    "librarian": {
+      "model": "openai/gpt-4.1-mini",
+      "allowedAdapters": ["local-docs", "docs-context7", "npm-registry", "web-search"]
     }
   },
-
-  "skills": {
-    "setupHints": true,
-    "defaultAllow": ["cartography"],
-    "cartography": {
-      "enabled": true,
-      "maxFiles": 250,
-      "maxDepth": 4,
-      "maxPerDirectory": 8,
-      "exclude": ["vendor"]
-    }
-  },
-
-  "adapters": {
-    "disabled": ["github-releases"],
-    "defaultAllow": ["docs-context7", "web-search"],
-    "modules": ["./pantheon-adapters/internal-docs.mjs"]
-  },
-
   "council": {
-    "defaultPreset": "review-board",
-    "masterTimeoutMs": 300000,
-    "councillorsTimeoutMs": 180000,
-    "presets": {
-      "review-board": {
-        "master": {
-          "model": "anthropic/claude-sonnet-4-5",
-          "variant": "high",
-          "prompt": "Prioritize correctness and operational simplicity."
-        },
-        "councillors": [
-          {
-            "name": "reviewer",
-            "model": "anthropic/claude-sonnet-4-5",
-            "prompt": "Review from a correctness and edge-case perspective."
-          },
-          {
-            "name": "architect",
-            "model": "openai/gpt-4.1",
-            "prompt": "Look for architecture risk and maintainability issues."
-          },
-          {
-            "name": "skeptic",
-            "model": "google/gemini-2.5-pro",
-            "prompt": "Challenge assumptions and suggest simpler alternatives."
-          }
-        ]
-      }
-    }
+    "defaultPreset": "review-board"
   },
-
-  "fallback": {
-    "timeoutMs": 15000,
-    "delegateTimeoutMs": 0,
-    "retryDelayMs": 500,
-    "retryOnEmpty": true,
-    "agentTimeouts": {
-      "explorer": 120000,
-      "librarian": 120000
-    },
-    "agentChains": {
-      "fixer": ["openai/gpt-4.1-mini"],
-      "librarian": ["openai/gpt-4.1-mini"]
-    },
-    "councilMaster": ["openai/gpt-4.1"]
+  "multiplexer": {
+    "tmux": true,
+    "layout": "main-vertical"
   }
 }
 ```
 
-Schema:
-- local copy in this repo: `./oh-my-opencode-pi.schema.json`
-- recommended config files:
-  - `~/.pi/agent/oh-my-opencode-pi.json`
-  - `~/.pi/agent/oh-my-opencode-pi.jsonc`
-  - `.pi/oh-my-opencode-pi.json`
-  - `.pi/oh-my-opencode-pi.jsonc`
+For the full option map, presets, council config, adapter policy, and schema guidance, see [`docs/configuration.md`](docs/configuration.md).
 
-Timeout behavior is now closer to the original `oh-my-opencode-slim` package:
-- `fallback.timeoutMs` defaults to `15000` and is used for background-style failover attempts
-- `pantheon_delegate` no longer has a hard timeout by default (`fallback.delegateTimeoutMs: 0`)
-- you can opt back into foreground limits globally with `fallback.delegateTimeoutMs` or per specialist with `fallback.agentTimeouts`
-- council uses longer dedicated timeouts: `council.councillorsTimeoutMs = 180000`, `council.masterTimeoutMs = 300000`
+## ⚡ Command center at a glance
 
-Additional config sections now supported:
-- top-level config presets via `preset`, `extends`, and `presets`
-- per-agent overrides via `agents.<name>`
-  - `model`
-  - `variant`
-  - `options`
-  - `tools`
-  - `noTools`
-  - `promptOverrideFile`
-  - `promptAppendFiles`
-  - `promptAppendText`
-  - `allowSkills`
-  - `denySkills`
-  - `allowedAdapters`
-  - `deniedAdapters`
-  - `disabled`
-- deep merge between global and project config
-- JSONC parsing for config files
-- `council.masterTimeoutMs`
-- `council.councillorsTimeoutMs`
-- `fallback.timeoutMs`
-- `fallback.delegateTimeoutMs`
-- `fallback.retryDelayMs`
-- `fallback.retryOnEmpty`
-- `fallback.agentTimeouts`
-- `fallback.agentChains`
-- `fallback.councilMaster`
-- `background.enabled`
-- `background.pollIntervalMs`
-- `background.logDir`
-- `background.maxConcurrent`
-- `multiplexer.tmux`
-- `multiplexer.splitDirection`
-- `multiplexer.layout`
-- `multiplexer.focusOnSpawn`
-- `multiplexer.keepPaneOnFinish`
-- `multiplexer.reuseWindow`
-- `multiplexer.windowName`
-- `research.timeoutMs`
-- `research.userAgent`
-- `research.maxResults`
-- `research.githubToken`
-- `research.defaultDocsSite`
-- `skills.setupHints`
-- `skills.defaultAllow`
-- `skills.defaultDeny`
-- `skills.cartography.enabled`
-- `skills.cartography.maxFiles`
-- `skills.cartography.maxDepth`
-- `skills.cartography.maxPerDirectory`
-- `skills.cartography.exclude`
-- `adapters.disableAll`
-- `adapters.disabled`
-- `adapters.defaultAllow`
-- `adapters.defaultDeny`
-- `adapters.modules`
-- `delegation.maxDepth`
-- `autoContinue.enabled`
-- `autoContinue.cooldownMs`
-- `autoContinue.maxContinuations`
-- `autoContinue.autoEnable`
-- `autoContinue.autoEnableThreshold`
-- `interview.templateTitle`
-- `workflow.injectHints`
-- `workflow.backgroundAwareness`
-- `workflow.todoThreshold`
-- `workflow.persistTodos`
-- `workflow.stateFile`
-- `workflow.phaseReminders`
-- `workflow.postFileToolNudges`
-- `workflow.delegateRetryGuidance`
-- `ui.dashboardWidget`
-- `ui.maxTodos`
-- `ui.maxBackgroundTasks`
-- `debug.enabled`
-- `debug.logDir`
+| Command | Purpose |
+|--------|---------|
+| `/pantheon` | Open the command center |
+| `/pantheon-agents` | List bundled/user/project Pantheon agents |
+| `/pantheon-council` | Launch a council run interactively |
+| `/pantheon-config` | Show config sources, presets, and warnings |
+| `/pantheon-skills` | Show effective skill guidance |
+| `/pantheon-adapters` | List adapters and effective policy |
+| `/pantheon-backgrounds` | Inspect recent background tasks |
+| `/pantheon-runtime` | Inspect runtime/parity state |
+| `/pantheon-stats` | Inspect usage and reliability statistics |
 
-## Built-in top-level config presets
+For the full command list, see [`docs/quick-reference.md`](docs/quick-reference.md) and [`docs/tools.md`](docs/tools.md).
 
-These top-level config presets can be used via `preset` or `extends`:
+## 🧰 Core tool surface
 
-- `default` — no extra config changes
-- `fast` — lower-overhead council/research defaults
-- `research` — stronger librarian/explorer bias and broader docs retrieval defaults
-- `durable` — more conservative retry/debug defaults
+### Delegation and consensus
 
-Project config is deep-merged on top of any selected presets, and project config also overrides global config.
+- `pantheon_delegate`
+- `pantheon_council`
 
-## Built-in council presets
+### Background execution
 
-The package now ships with these default presets:
-
-- `default` — 3 councillors
-- `quick` — 1 councillor for low overhead second-opinion checks
-- `balanced` — 2 councillors for faster trade-off review
-- `review-board` — 3 role-shaped councillors (`reviewer`, `architect`, `skeptic`) plus master guidance
-
-You can override any of them in your config.
-
-## Interactive commands
-
-- `/pantheon` — interactive command center with a richer selector UI
-- `/pantheon-agents` — list all bundled/user/project Pantheon agents
-- `/pantheon-council` — interactive council launcher
-- `/pantheon-config` — show config source paths, presets, and validation warnings
-- `/pantheon-skills` — show effective skill/cartography guidance plus a starter config snippet
-- `/pantheon-repo-map` — render a filesystem repo map summary for the current workspace
-- `/pantheon-code-map` — render a semantic code map with entrypoints, imports, and symbols
-- `/pantheon-adapters` — list registered research adapters and effective session policy
-- `/pantheon-as <agent> <task>` — direct-route the next task to a specialist
-- `/pantheon-auto-continue [on|off]` — toggle auto-continue
-- `/pantheon-spec` — interactive interview that loads a markdown spec into the editor
-- `/pantheon-spec-studio` — open an editor-first spec template for feature/refactor/investigation/incident work
-- `/pantheon-bootstrap` — scaffold project-local Pantheon config and starter directories
-- `/pantheon-backgrounds` — list recent background tasks
-- `/pantheon-attach [taskId]` — open/reopen a tmux pane for a background task log
-- `/pantheon-attach-all` — open/reuse panes for all queued/running background tasks
-- `/pantheon-cancel [taskId]` — cancel a running background task
-- `/pantheon-log [taskId]` — load the tail of a background task log into the editor
-- `/pantheon-result [taskId]` — load the final result summary of a background task into the editor
-- `/pantheon-retry [taskId]` — retry a finished/failed background task from its saved spec
-- `/pantheon-todos` — inspect persisted Pantheon workflow todos/state
-- `/pantheon-clear-todos` — clear persisted Pantheon workflow todos
-- `/pantheon-overview` — combined workflow + background overview
-- `/pantheon-resume` — generate a resume brief from persisted todos and recent background work
-- `/pantheon-cleanup` — remove old completed task artifacts
-- `/pantheon-runtime` — inspect active hook/runtime behavior and known parity limits inside pi
-- `/pantheon-stats` — inspect Pantheon usage, reliability, and adapter/background statistics
-- `/pantheon-debug-dir` — show the foreground debug trace directory
-- `/pantheon-debugs` — list recent foreground debug traces
-- `/pantheon-debug [traceId]` — load a recent foreground debug trace into the editor
-
-## Background tasks
-
-New tools:
 - `pantheon_background`
 - `pantheon_background_status`
 - `pantheon_background_wait`
 - `pantheon_background_result`
+- `pantheon_background_watch`
 - `pantheon_background_retry`
 - `pantheon_background_cancel`
-- `pantheon_background_log`
 - `pantheon_background_attach`
-- `pantheon_background_overview`
-- `pantheon_workflow_state`
-- `pantheon_resume_context`
-- `pantheon_auto_continue`
-- `pantheon_interview_spec`
-- `pantheon_spec_template`
-- `pantheon_bootstrap`
-- `pantheon_repo_map`
-- `pantheon_code_map`
 
-Use these when work should continue detached from the current flow.
+### Code intelligence
 
-Stabilization features now included:
-- restart-time reconciliation of stale queued/running tasks
-- queued-task auto-start with `background.maxConcurrent`
-- richer task status footer updates with queued/running/done/failure counts
-- cancellation with PID signaling
-- retry from saved task specs
-- tmux pane attach/reopen via command/tool
-- shared tmux window orchestration with pane reuse/reattach
-- configurable tmux layout, focus, keep-pane, reuse-window, and window-name behavior
-- log tail inspection
-- cleanup of old finished task artifacts
-
-## Auto-continue workflow
-
-The package can now auto-continue when the assistant leaves unchecked markdown todos like:
-
-```md
-- [ ] Investigate bug
-- [ ] Add tests
-```
-
-If auto-continue is enabled, the extension waits for `autoContinue.cooldownMs` and then sends a follow-up instruction to keep working through remaining unchecked todos.
-
-The extension can also persist the latest unchecked todo list to `workflow.stateFile` so later turns can resume prior work context.
-
-Controls:
-- command: `/pantheon-auto-continue [on|off]`
-- tool: `pantheon_auto_continue`
-
-Workflow-state controls:
-- command: `/pantheon-todos`
-- command: `/pantheon-clear-todos`
-- command: `/pantheon-overview`
-- command: `/pantheon-resume`
-- tool: `pantheon_workflow_state`
-- tool: `pantheon_resume_context`
-
-## UI polish
-
-The extension now includes a more polished terminal UI layer:
-- `/pantheon` opens a command-center style selector instead of a plain prompt list
-- interactive task, council-preset, and specialist pickers use a consistent bordered selector UI
-- a compact dashboard widget can appear below the editor, surfacing:
-  - active/queued background work
-  - persisted unchecked todos
-  - auto-continue state
-  - config warning count
-- background/workflow tools render more cleanly inside pi's tool timeline
-
-Dashboard widget config:
-- `ui.dashboardWidget` — enable/disable the below-editor dashboard
-- `ui.maxTodos` — max persisted todos shown in the widget
-- `ui.maxBackgroundTasks` — max active background tasks shown in the widget
-
-## Debugging traces
-
-Foreground delegation and council runs now write persistent debug traces by default.
-
-Default debug directory:
-- `.oh-my-opencode-pi-debug/` in the current project
-- configurable via `debug.logDir`
-
-Each trace contains structured artifacts such as:
-- `summary.json` — top-level trace metadata, params, status, final result summary
-- `events.ndjson` — lifecycle events across the whole trace
-- per-subagent attempt folders with:
-  - `summary.json`
-  - `stdout.ndjson`
-  - `stderr.log`
-
-Useful commands:
-- `/pantheon-debug-dir`
-- `/pantheon-debugs`
-- `/pantheon-debug`
-
-This makes it possible to inspect failures like `Subagent was aborted` and see whether the cause was:
-- timeout
-- parent cancellation
-- stderr/tool/runtime failure
-- fallback-attempt behavior
-
-## Interview/spec workflow
-
-You can generate a structured markdown specification in several ways:
-- command: `/pantheon-spec`
-- command: `/pantheon-spec-studio`
-- tool: `pantheon_interview_spec`
-- tool: `pantheon_spec_template`
-
-`/pantheon-spec` remains the guided interview flow.
-
-`/pantheon-spec-studio` is the richer editor-first path: choose a template kind (`feature`, `refactor`, `investigation`, `incident`) and Pantheon loads a structured outline into the editor for iterative drafting.
-
-## Bootstrap / onboarding
-
-For first-run setup in a repository, use:
-- command: `/pantheon-bootstrap`
-- tool: `pantheon_bootstrap`
-
-This scaffolds:
-- `.pi/oh-my-opencode-pi.jsonc`
-- `.pi/pantheon-adapters/`
-- `.pi/agents/`
-- `.pi/prompts/`
-
-## LSP and structural tools
-
-Pi-native code intelligence tools now include:
-- `pantheon_lsp_goto_definition`
-- `pantheon_lsp_hover`
-- `pantheon_lsp_find_references`
-- `pantheon_lsp_find_implementations`
-- `pantheon_lsp_type_definition`
-- `pantheon_lsp_symbols`
-- `pantheon_lsp_diagnostics`
-- `pantheon_lsp_rename`
+- `pantheon_lsp_*` navigation / rename / diagnostics tools
+- `pantheon_format_document`
 - `pantheon_apply_patch`
 - `pantheon_ast_grep_search`
 - `pantheon_ast_grep_replace`
 
-Current LSP support is TypeScript/JavaScript-focused via the TypeScript language service, but it now covers more than the original basic definition/reference/diagnostic/rename set. For larger refactors, `pantheon_apply_patch` adds a more apply_patch-like path that can tolerate moved hunks and whitespace drift better than a strict exact-match edit.
+### Research and repository mapping
 
-## External research tools
+- `pantheon_adapter_*`
+- `pantheon_fetch*`, `pantheon_search`
+- `pantheon_repo_map`
+- `pantheon_code_map`
 
-New tools:
-- `pantheon_fetch` — fetch a URL, extract title + readable text
-- `pantheon_search` — lightweight web search for external research (`scope`: `web`, `github`, `docs`; optional `site` and `repo` targeting)
-- `pantheon_resolve_docs` — resolve likely docs sources for a package, repo, or docs site and optionally search by topic
-- `pantheon_fetch_docs` — fetch docs content using package/repo/site-aware resolution instead of only raw URLs
-- `pantheon_github_file` — fetch a specific upstream GitHub file
-- `pantheon_github_releases` — fetch recent GitHub release notes/changelog history
-- `pantheon_npm_info` — inspect npm registry metadata and versions
-- `pantheon_package_docs` — fetch package metadata plus README/docs excerpt
-- `pantheon_adapter_list` — list the structured adapter registry and effective permissions
-- `pantheon_adapter_search` — search through structured adapters such as `local-docs`, `docs-context7`, `grep-app`, `github-code-search`, `web-search`, and `github-releases`
-- `pantheon_adapter_fetch` — fetch through a specific adapter with policy enforcement
-- `pantheon_runtime_info` — inspect active runtime hooks and known parity limits
-- `pantheon_stats` — inspect persisted Pantheon usage and reliability statistics
+See [`docs/tools.md`](docs/tools.md) for the complete breakdown.
 
-The bundled `librarian` agent now has access to these tools.
+## ✨ Feature highlights
 
-## Repo cartography / skills
+### Background tasks + tmux
 
-The package now includes a Pi-native repository cartography layer:
-- `pantheon_repo_map` for quick filesystem-level repo summaries
-- `pantheon_code_map` for semantic entrypoint/import/symbol mapping
-- per-agent `allowSkills` / `denySkills` policy fields
-- `skills.cartography.*` config for scan limits and excludes
-- `/pantheon-skills` for a starter config/setup flow
+Pantheon can queue detached specialist work, persist task specs/results, and optionally attach live tmux panes for progress visibility.
 
-When cartography is enabled, bundled agents get a prompt hint to use `pantheon_repo_map` and `pantheon_code_map` during reconnaissance-heavy work.
+See:
+- [`docs/multiplexer-integration.md`](docs/multiplexer-integration.md)
+- [`docs/tools.md`](docs/tools.md)
 
-## Adapter system
+### Auto-continue + workflow state
 
-The package also includes a lightweight MCP-like adapter registry for structured research:
-- `local-docs` — local README/docs markdown search inside the current repository
-- `docs-context7` — docs/package/site-aware resolution and fetch
-- `grep-app` — public code search against grep.app-style results
-- `github-code-search` — structured GitHub code search within a target repo
-- `web-search` — generic fallback search/fetch
-- `github-releases` — structured release/changelog retrieval
-- custom adapter modules loaded from `adapters.modules`, `~/.pi/agent/pantheon-adapters/`, and project-local `.pi/pantheon-adapters/`
+The port can persist unchecked todos, auto-continue multi-step work, and generate resume context from previous background activity.
 
-Custom adapter modules can export a default object with `id`, `label`, `description`, and `search`/`fetch` functions. Those handlers receive the current config plus helper utilities for docs resolution, web search, fetches, GitHub files/releases, npm/package docs, and HTML-to-text conversion.
+### Repo cartography
 
-Policy controls:
-- global: `adapters.disableAll`, `adapters.disabled`, `adapters.defaultAllow`, `adapters.defaultDeny`
-- per-agent: `agents.<name>.allowedAdapters`, `agents.<name>.deniedAdapters`
+The bundled `cartography` skill generates and maintains `codemap.md` documentation backed by `.pi/cartography.json`.
 
-Runtime enforcement uses the current Pantheon agent identity for delegated/background specialists, so adapter permissions are not just documentation hints.
+See:
+- [`docs/cartography.md`](docs/cartography.md)
+- [`codemap.md`](codemap.md)
 
-## Workflow hints
+### Adapters instead of MCP runtime parity
 
-Runtime resilience additions now included:
-- phase reminders for large multi-step work (`scout → plan → implement → verify`, or debug/refactor-specific variants)
-- post-file-tool nudges after edit/write/structural-rewrite actions
-- delegate/council retry guidance when a foreground specialist run fails
-- tolerant JSON/edit recovery and stronger foreground fallback chains
+The pi port uses a policy-aware adapter system for docs, package, release, web, and code research.
 
-These are configurable under `workflow.phaseReminders`, `workflow.postFileToolNudges`, and `workflow.delegateRetryGuidance`.
+See:
+- [`docs/mcps.md`](docs/mcps.md)
+- [`docs/provider-configurations.md`](docs/provider-configurations.md)
 
-## Workflow hints
+### Debugging and observability
 
-The extension now injects lightweight orchestration hints into top-level turns to nudge better specialist routing. Examples:
-- suggest `librarian` for library/API questions
-- suggest `explorer` for reconnaissance tasks
-- suggest `oracle` or `pantheon_council` for risky decisions
-- remind the orchestrator about active background tasks
-- suggest auto-continue for multi-step work
-- inject persisted workflow todos from prior work when available
-- surface resume context from persisted todos + recent background task history
+Pantheon writes foreground debug traces and lightweight usage stats so failed delegate/council/background runs can be inspected after the fact. Foreground delegate/council runs also surface a live subagent activity widget below the editor, and `/pantheon-subagents` lets you inspect per-agent details or jump straight to the full trace.
 
-## Edit rescue behavior
+See:
+- [`docs/tools.md`](docs/tools.md)
+- [`docs/runtime-parity.md`](docs/runtime-parity.md)
 
-This port includes a lightweight approximation of the `apply_patch` resilience ideas from oh-my-opencode-slim, adapted to pi.
+## 📘 Where the detailed reference lives now
 
-What it does:
-- intercepts `edit` tool calls before execution
-- rescues edits **sequentially**, so earlier recovered edits inform later ones in the same tool call
-- if an `oldText` block is not found exactly, it tries a **unique tolerant match** against the real file
-- tolerance includes:
-  - CRLF vs LF differences
-  - trailing space / tab drift
-  - Unicode normalization drift (`NFC`)
-  - anchor-based recovery using distinctive first/last meaningful lines
-  - distinctive-line signature recovery for repeated/shifted hunks
-  - bounded high-confidence fuzzy rescue against nearby line-count windows (not only exact same-sized windows)
-- if it finds a safe match, it rewrites `oldText` to the exact current file bytes so pi's native `edit` can succeed
+The README is intentionally the overview. Detailed reference moved to the docs set:
 
-What it does not do:
-- it does **not** rewrite ambiguous matches
-- it does **not** rescue `write`
-- it does **not** do full patch/hunk recovery like the original OpenCode `apply_patch` interception
-
-## Observability
-
-Pantheon now persists lightweight usage diagnostics to `.oh-my-opencode-pi-stats.json`, including delegate/council success-failure counts, per-agent totals, adapter usage/failures, background outcomes, and recent activity.
-
-Use:
-- `/pantheon-stats`
-- `pantheon_stats`
-
-## Runtime parity notes
-
-A living runtime comparison now lives in `docs/runtime-parity.md`, and you can inspect the active in-session view with `/pantheon-runtime` or `pantheon_runtime_info`.
+- installation / verification → [`docs/installation.md`](docs/installation.md)
+- providers / model strategy → [`docs/provider-configurations.md`](docs/provider-configurations.md)
+- full config reference → [`docs/configuration.md`](docs/configuration.md)
+- council behavior → [`docs/council.md`](docs/council.md)
+- adapters / MCP-equivalent surface → [`docs/mcps.md`](docs/mcps.md)
+- tools / commands / background / LSP / patch behavior → [`docs/tools.md`](docs/tools.md)
+- runtime limits and parity gaps → [`docs/runtime-parity.md`](docs/runtime-parity.md)
 
 ## Notes
 
 - Top-level sessions get the orchestrator prompt automatically.
 - Subagent sessions do **not** get it; they only receive their specialist prompt.
-- `pantheon_council` works even without config, but config is how you get true model diversity.
+- `pantheon_council` works without custom config, but config is how you get real model diversity.
+- This port aims for product-behavior parity where possible, not byte-for-byte OpenCode runtime parity.

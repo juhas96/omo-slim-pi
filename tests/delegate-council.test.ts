@@ -76,3 +76,47 @@ test("pantheon_delegate reports failures from the subagent runner", async () => 
     process.argv[1] = originalArgv1;
   }
 });
+
+test("pantheon_delegate only uses CLI --tools for built-in toolsets", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-tools-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const argvPiScript = path.join(tempRoot, "argv-pi.mjs");
+  fs.writeFileSync(argvPiScript, `
+    const args = process.argv.slice(2);
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: JSON.stringify(args) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = argvPiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+
+    const fixerResult = await delegateTool.execute("call-4", { agent: "fixer", task: "Inspect CLI args" }, undefined, undefined, { cwd: projectDir });
+    const fixerArgs = fixerResult.content[0]?.text ?? "";
+    assert.match(fixerArgs, /"--tools","read,grep,find,ls,bash,edit,write"/);
+
+    const librarianResult = await delegateTool.execute("call-5", { agent: "librarian", task: "Inspect CLI args" }, undefined, undefined, { cwd: projectDir });
+    const librarianArgs = librarianResult.content[0]?.text ?? "";
+    assert.doesNotMatch(librarianArgs, /"--tools"/);
+    assert.match(librarianArgs, /Tool policy:/);
+    assert.match(librarianArgs, /pantheon_fetch/);
+
+    const councilResult = await delegateTool.execute("call-6", { agent: "council", task: "Inspect CLI args" }, undefined, undefined, { cwd: projectDir });
+    const councilArgs = councilResult.content[0]?.text ?? "";
+    assert.doesNotMatch(councilArgs, /"--tools"/);
+    assert.match(councilArgs, /Tool policy:/);
+    assert.match(councilArgs, /pantheon_council/);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});

@@ -42,13 +42,33 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const CORE_CLI_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+
+function canUseCliToolFilter(tools) {
+  return Boolean(tools?.length) && tools.every((tool) => CORE_CLI_TOOL_NAMES.has(tool));
+}
+
+function buildSubagentSystemPrompt(systemPrompt, tools, noTools) {
+  const parts = [systemPrompt?.trim() ?? ""];
+  if (!noTools && tools?.length && !canUseCliToolFilter(tools)) {
+    parts.push([
+      "Tool policy:",
+      `- Your allowed tools for this task are: ${tools.join(", ")}.`,
+      "- Do not use tools outside that allowlist, even if they appear in the runtime.",
+      "- This allowlist is prompt-enforced because pi CLI --tools filtering only recognizes core built-in tools before extensions load.",
+    ].join("\n"));
+  }
+  return parts.filter(Boolean).join("\n\n");
+}
+
 async function runAttempt(spec, model) {
   const args = [...(spec.piBaseArgs ?? []), "--mode", "json", "-p", "--no-session"];
   if (model) args.push("--model", model);
   if (spec.options?.length) args.push(...spec.options);
   if (spec.noTools) args.push("--no-tools");
-  else if (spec.tools?.length) args.push("--tools", spec.tools.join(","));
-  if (spec.systemPrompt?.trim()) args.push("--append-system-prompt", spec.systemPrompt);
+  else if (canUseCliToolFilter(spec.tools)) args.push("--tools", spec.tools.join(","));
+  const systemPrompt = buildSubagentSystemPrompt(spec.systemPrompt, spec.tools, spec.noTools);
+  if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   args.push(`Task: ${spec.task}`);
 
   const result = {
@@ -146,7 +166,25 @@ async function main() {
   const specPath = process.argv[2];
   const spec = readJson(specPath);
   const existing = readJsonSafe(spec.resultPath) ?? {};
-  writeJson(spec.resultPath, { ...existing, ...spec.meta, status: "running", startedAt: Date.now(), pid: process.pid });
+  const heartbeatIntervalMs = Number.isFinite(spec.heartbeatIntervalMs) ? Math.max(250, Math.floor(spec.heartbeatIntervalMs)) : 1500;
+  writeJson(spec.resultPath, {
+    ...existing,
+    ...spec.meta,
+    status: "running",
+    startedAt: Date.now(),
+    heartbeatAt: Date.now(),
+    pid: process.pid,
+  });
+  const heartbeat = setInterval(() => {
+    writeJson(spec.resultPath, {
+      ...(readJsonSafe(spec.resultPath) ?? {}),
+      ...(spec.meta ?? {}),
+      status: "running",
+      heartbeatAt: Date.now(),
+      pid: process.pid,
+      logPath: spec.logPath,
+    });
+  }, heartbeatIntervalMs);
 
   const models = spec.models?.length ? spec.models : [spec.model];
   const retryOnEmpty = spec.retryOnEmpty !== false;
@@ -174,11 +212,13 @@ async function main() {
   }
 
   const summary = summarize(finalResult ?? { messages: [], stderr: "", errorMessage: "No result" });
+  clearInterval(heartbeat);
   writeJson(spec.resultPath, {
     ...(readJsonSafe(spec.resultPath) ?? {}),
     ...spec.meta,
     status: finalOk ? "completed" : "failed",
     finishedAt: Date.now(),
+    heartbeatAt: Date.now(),
     model: finalResult?.model,
     summary,
     result: finalResult,
@@ -194,6 +234,7 @@ process.on("SIGTERM", () => {
       ...(spec.meta ?? {}),
       status: "cancelled",
       finishedAt: Date.now(),
+      heartbeatAt: Date.now(),
       summary: "Cancelled by user",
       logPath: spec.logPath,
       pid: process.pid,
@@ -210,6 +251,7 @@ main().catch((error) => {
       ...(spec.meta ?? {}),
       status: "failed",
       finishedAt: Date.now(),
+      heartbeatAt: Date.now(),
       summary: error instanceof Error ? error.message : String(error),
       logPath: spec.logPath,
     });

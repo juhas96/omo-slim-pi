@@ -1,0 +1,15 @@
+{
+  "id": "background-retry-recovery",
+  "title": "Background workflow recovers via retry after terminal failure",
+  "workflow": "background",
+  "description": "A foreground-only baseline would fail and stop, while Pantheon background orchestration should preserve artifacts, suggest recovery steps, and allow a successful retry.",
+  "tags": ["background", "retry", "recovery"],
+  "baseline": {
+    "label": "foreground-single-run",
+    "status": "failed",
+    "durationMs": 200,
+    "attempts": 1,
+    "qualityScore": 0.15,
+    "notes": ["Initial run failed with no detached retry path.", "No preserved task artifact or recovery guide was available."]
+  }
+}

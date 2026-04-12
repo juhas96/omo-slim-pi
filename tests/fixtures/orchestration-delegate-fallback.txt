@@ -1,0 +1,7 @@
+Scenario: delegate-fallback-recovery
+Updates:
+- (no output)
+- recovered:Task: Recover this task
+Final:
+- recovered:Task: Recover this task
+- model: demo/backup

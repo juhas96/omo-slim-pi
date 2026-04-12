@@ -36,6 +36,15 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Repository Map
+
+A repository codemap is available at `codemap.md` in the project root.
+
+Before working on changes, read:
+- `codemap.md` for the top-level architecture map
+- `extensions/oh-my-opencode-pi/codemap.md` for the extension runtime surface
+- the relevant guide in `docs/` when the task touches install, config, council, adapters, tools, or multiplexer behavior
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 

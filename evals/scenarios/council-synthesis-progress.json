@@ -1,0 +1,15 @@
+{
+  "id": "council-synthesis-progress",
+  "title": "Council flow surfaces partial progress and final synthesis",
+  "workflow": "council",
+  "description": "A simple baseline single-agent answer may respond once, but Pantheon council should show interim progress from councillors and then a synthesized final answer.",
+  "tags": ["council", "progress", "synthesis"],
+  "baseline": {
+    "label": "single-specialist",
+    "status": "passed",
+    "durationMs": 140,
+    "attempts": 1,
+    "qualityScore": 0.55,
+    "notes": ["Single specialist returned one opinion.", "No explicit progress or synthesis trace was visible."]
+  }
+}

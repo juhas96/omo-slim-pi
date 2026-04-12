@@ -1,0 +1,15 @@
+{
+  "id": "doctor-config-diagnostics",
+  "title": "Doctor report turns config mistakes into actionable guidance",
+  "workflow": "doctor",
+  "description": "A baseline raw failure would expose little guidance, while Pantheon doctor should categorize config issues and explain concrete next steps.",
+  "tags": ["doctor", "config", "diagnostics"],
+  "baseline": {
+    "label": "raw-config-failure",
+    "status": "failed",
+    "durationMs": 80,
+    "attempts": 1,
+    "qualityScore": 0.2,
+    "notes": ["Only raw failure text was shown.", "No categorized diagnostics or recovery steps were available."]
+  }
+}

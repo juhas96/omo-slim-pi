@@ -1,0 +1,33 @@
+Pantheon doctor report
+
+Workspace: /tmp/project
+Config diagnostics: 2 (1 errors, 1 warnings)
+Adapter health checks: 2 (1 attention needed)
+Background task dir: missing — /tmp/project/.oh-my-opencode-pi-tasks
+Debug dir: ready — /tmp/project/.oh-my-opencode-pi-debug
+Workflow state file: not yet created — /tmp/project/.oh-my-opencode-pi-workflow.json
+tmux available: no
+inside tmux: no
+Known background tasks: 2
+
+Checks:
+- Config: error
+- Adapters: warning
+- Multiplexer: warning
+- Background storage: warning
+- Debug artifacts: ok
+
+Config diagnostics:
+- [error] config.multiplexer.layout (/tmp/project/.pi/oh-my-opencode-pi.jsonc) — Expected one of: tiled, even-horizontal, even-vertical, main-horizontal, main-vertical.
+- [warning] config.mystery (/tmp/project/.pi/oh-my-opencode-pi.jsonc) — Unknown config key; it will be ignored by Pantheon.
+
+Adapter health:
+- docs-context7 [ok] auth=not-required — Docs source is ready.
+- github-releases [warn] auth=missing — GitHub token not configured; release lookup may be rate-limited.
+
+Suggested next steps:
+- Fix config errors first, then rerun /pantheon-doctor.
+- Review /pantheon-config for merged config details and warning context.
+- Install tmux if you want attach/reuse pane workflows for background tasks.
+- Run a background task once to create the task directory, or create it manually if desired.
+- Run /pantheon-adapter-health for focused adapter readiness details.

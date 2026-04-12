@@ -25,6 +25,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
   fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.jsonc"), `{
     // JSONC support
     "preset": "fast",
+    "background": { "reuseSessions": true, "heartbeatIntervalMs": 900, "staleAfterMs": 12000 },
     "skills": {
       "defaultAllow": ["cartography"],
       "cartography": { "enabled": true, "maxFiles": 120 }
@@ -48,6 +49,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
   fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), `{
     "extends": ["durable"],
     "research": { "maxResults": 9 },
+    "multiplexer": { "projectScopedWindow": false },
     "agents": {
       "explorer": {
         "promptAppendFiles": ["./explorer-project.md"],
@@ -65,6 +67,9 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.equal(result.sources.projectPath, path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"));
     assert.deepEqual(result.activePresets.sort(), ["durable", "fast"]);
     assert.equal(result.config.background?.maxConcurrent, 1);
+    assert.equal(result.config.background?.reuseSessions, true);
+    assert.equal(result.config.background?.heartbeatIntervalMs, 900);
+    assert.equal(result.config.background?.staleAfterMs, 12000);
     assert.equal(result.config.fallback?.retryOnEmpty, true);
     assert.equal(result.config.research?.maxResults, 9);
     assert.equal(result.config.agents?.fixer?.model, "openai/gpt-4.1");
@@ -78,7 +83,50 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.deepEqual(result.config.adapters?.defaultAllow, ["docs-context7"]);
     assert.deepEqual(result.config.adapters?.disabled, ["github-releases"]);
     assert.deepEqual(result.config.adapters?.modules, [customAdapterModule]);
+    assert.equal(result.config.multiplexer?.projectScopedWindow, false);
     assert.equal(result.warnings.length, 0);
+    assert.equal(result.diagnostics.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env[AGENT_DIR_ENV];
+    else process.env[AGENT_DIR_ENV] = previous;
+  }
+});
+
+test("loadPantheonConfig surfaces schema and lint diagnostics for invalid config entries", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-config-invalid-"));
+  const agentDir = path.join(tempRoot, "agent");
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
+
+  fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), `{
+    "$schema": "../missing-schema.json",
+    "mystery": true,
+    "multiplexer": { "layout": "zigzag" },
+    "adapters": {
+      "defaultAllow": ["unknown-adapter"],
+      "modules": ["./missing-adapter.mjs"]
+    },
+    "agents": {
+      "fixer": {
+        "promptOverrideFile": "./missing-prompt.md",
+        "unknownAgentSetting": true
+      }
+    }
+  }`);
+
+  const previous = process.env[AGENT_DIR_ENV];
+  process.env[AGENT_DIR_ENV] = agentDir;
+  try {
+    const result = loadPantheonConfig(projectDir);
+    assert.ok(result.diagnostics.length >= 5);
+    const text = result.warnings.join("\n");
+    assert.match(text, /Unknown config key/);
+    assert.match(text, /Expected one of: tiled, even-horizontal, even-vertical, main-horizontal, main-vertical/);
+    assert.match(text, /Unknown adapter id 'unknown-adapter'/);
+    assert.match(text, /Module not found/);
+    assert.match(text, /File not found/);
+    assert.match(text, /Schema not found/);
   } finally {
     if (previous === undefined) delete process.env[AGENT_DIR_ENV];
     else process.env[AGENT_DIR_ENV] = previous;

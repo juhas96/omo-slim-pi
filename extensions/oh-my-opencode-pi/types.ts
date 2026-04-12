@@ -23,6 +23,15 @@ export interface SingleResult {
   errorMessage?: string;
   abortReason?: string;
   step?: number;
+  debugTraceId?: string;
+  debugLabel?: string;
+  debugDir?: string;
+  debugSummaryPath?: string;
+  debugStdoutPath?: string;
+  debugStderrPath?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  durationMs?: number;
 }
 
 export interface BackgroundTaskRecord {
@@ -40,6 +49,10 @@ export interface BackgroundTaskRecord {
   specPath?: string;
   paneId?: string;
   pid?: number;
+  sessionKey?: string;
+  heartbeatAt?: number;
+  watchCount?: number;
+  reusedFrom?: string;
   result?: SingleResult;
 }
 
@@ -58,6 +71,8 @@ export interface BackgroundTaskSpec {
   timeoutMs?: number;
   retryDelayMs?: number;
   retryOnEmpty?: boolean;
+  heartbeatIntervalMs?: number;
+  staleAfterMs?: number;
   logPath: string;
   resultPath: string;
   meta: BackgroundTaskRecord;

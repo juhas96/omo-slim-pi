@@ -25,16 +25,6 @@ export function hasUncheckedTodos(text: string): boolean {
   return countUncheckedTodos(text) > 0;
 }
 
-export function buildInterviewSpec(title: string, data: {
-  objective: string;
-  users: string;
-  constraints: string;
-  success: string;
-  notes: string;
-}): string {
-  return `# ${title}\n\n## Objective\n${data.objective}\n\n## Users / Stakeholders\n${data.users}\n\n## Constraints\n${data.constraints}\n\n## Success Criteria\n${data.success}\n\n## Notes\n${data.notes || "-"}\n`;
-}
-
 export function extractUncheckedTodoItems(text: string): string[] {
   return [...text.matchAll(/^\s*[-*]\s+\[\s\]\s+(.+)$/gm)].map((match) => match[1].trim()).filter(Boolean);
 }
