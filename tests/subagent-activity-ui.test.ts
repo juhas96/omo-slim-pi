@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
-function registerHarness() {
+function registerHarness(commandMessages: Array<{ content?: string; details?: any }> = []) {
   const tools = new Map<string, any>();
   const commands = new Map<string, any>();
   const fakePi = {
@@ -16,11 +16,15 @@ function registerHarness() {
     registerCommand(name: string, spec: any) {
       commands.set(name, spec);
     },
+    registerMessageRenderer() {},
+    sendMessage(message: { content?: string; details?: any }) {
+      commandMessages.push(message);
+    },
     sendUserMessage() {},
     appendEntry() {},
   };
   extension(fakePi as never);
-  return { tools, commands };
+  return { tools, commands, commandMessages };
 }
 
 function fakeTheme() {
@@ -165,7 +169,8 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
   const originalArgv1 = process.argv[1];
   process.argv[1] = fakePiScript;
   try {
-    const { tools, commands } = registerHarness();
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const { tools, commands } = registerHarness(commandMessages);
     const delegateTool = tools.get("pantheon_delegate");
     const pantheonSubagents = commands.get("pantheon-subagents");
     assert.ok(delegateTool?.execute);
@@ -224,7 +229,9 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
         input: async () => "",
       },
     });
-    assert.match(editorWrites[1] ?? "", /Trace:/);
+    assert.equal(editorWrites[1] ?? "", "");
+    assert.match(commandMessages.at(-1)?.content ?? "", /Command: \/pantheon-debug/);
+    assert.match(commandMessages.at(-1)?.content ?? "", /Trace:/);
   } finally {
     process.argv[1] = originalArgv1;
   }

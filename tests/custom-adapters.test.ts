@@ -46,6 +46,8 @@ test("custom adapter modules are discovered, listed, and executable", async () =
         tools.set(tool.name, tool);
       },
       registerCommand() {},
+      registerMessageRenderer() {},
+      sendMessage() {},
       sendUserMessage() {},
     };
     extension(fakePi as never);

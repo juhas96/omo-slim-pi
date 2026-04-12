@@ -17,6 +17,12 @@ test("extension registers delegate, council, background, orchestration, and adap
     registerCommand(name: string) {
       commands.push(name);
     },
+    registerMessageRenderer() {
+      // noop
+    },
+    sendMessage() {
+      // noop
+    },
     sendUserMessage() {
       // noop
     },

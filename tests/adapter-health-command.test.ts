@@ -25,6 +25,8 @@ test("adapter health command reports status without prefilling the composer", as
     registerCommand(name: string, spec: any) {
       commands.set(name, spec);
     },
+    registerMessageRenderer() {},
+    sendMessage() {},
     sendUserMessage() {},
     appendEntry() {},
   };

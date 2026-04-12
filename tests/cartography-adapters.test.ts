@@ -34,6 +34,12 @@ test("repo map tool summarizes a workspace and adapter policy reflects config di
       registerCommand() {
         // noop
       },
+      registerMessageRenderer() {
+        // noop
+      },
+      sendMessage() {
+        // noop
+      },
       sendUserMessage() {
         // noop
       },

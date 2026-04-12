@@ -56,7 +56,7 @@ function fakeTheme() {
   };
 }
 
-function registerHarness() {
+function registerHarness(commandMessages: Array<{ content?: string; details?: any }> = []) {
   const tools = new Map<string, any>();
   const commands = new Map<string, any>();
   const fakePi = {
@@ -66,6 +66,10 @@ function registerHarness() {
     },
     registerCommand(name: string, spec: any) {
       commands.set(name, spec);
+    },
+    registerMessageRenderer() {},
+    sendMessage(message: { content?: string; details?: any }) {
+      commandMessages.push(message);
     },
     sendUserMessage() {},
     appendEntry() {},
@@ -223,7 +227,8 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
   `);
 
   return withProcessArgv1(fakePi, async () => {
-    const { commands } = registerHarness();
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const { commands } = registerHarness(commandMessages);
     const command = commands.get("pantheon-council");
     const editorWrites: string[] = [];
     const widgetWrites: string[][] = [];
@@ -244,9 +249,22 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
         },
       },
     });
-    const finalText = editorWrites.at(-1) ?? "";
-    const partialCount = editorWrites.filter((text) => /Status: warning/i.test(text)).length;
-    const passed = partialCount > 0 && /Status: success/i.test(finalText) && /Council preset: default/i.test(finalText);
+    const finalText = commandMessages.at(-1)?.content ?? "";
+    const partialCount = widgetWrites.filter((lines) => /WARNING/i.test(lines.join("\n"))).length;
+    const passed = editorWrites.length === 0 && partialCount > 0 && /Status: success/i.test(finalText) && /Council preset: default/i.test(finalText);
+    const normalizeCouncilWidgetLine = (line: string): string => {
+      const normalized = line.replace(/\(\d+ms\)/g, "(<elapsed>)");
+      if (normalized.includes("· councillors |")) {
+        const ready = (normalized.match(/✓ /g) ?? []).length;
+        return `Pantheon subagents • council default · councillors | ${ready}/3 ready`;
+      }
+      if (normalized.startsWith("Pantheon subagents • council default |") && normalized.includes("✓ ")) {
+        const finished = (normalized.match(/✓ /g) ?? []).length;
+        return `Pantheon subagents • council default | ${finished}/4 finished`;
+      }
+      return normalized;
+    };
+
     return {
       scenarioId: def.id,
       title: def.title,
@@ -257,14 +275,15 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
       qualityScore: passed ? 1 : 0.3,
       timeline: [
         `Scenario: ${def.id}`,
-        "Editor writes:",
-        ...editorWrites.map((text, index) => `${index + 1}. ${previewText(text, 180)}`),
-        "Widget final:",
-        widgetWrites.at(-1)?.join(" | ") ?? "(none)",
+        `Editor writes: ${editorWrites.length}`,
+        "Chat final:",
+        previewText(finalText, 180),
+        "Widget updates:",
+        ...widgetWrites.map((lines, index) => `${index + 1}. ${previewText(normalizeCouncilWidgetLine(lines.join(" | ")), 180)}`),
       ].join("\n"),
       outputPreview: previewText(finalText),
       notes: [
-        partialCount > 0 ? `Observed ${partialCount} partial progress update(s).` : "No partial council progress observed.",
+        partialCount > 0 ? `Observed ${partialCount} partial widget update(s).` : "No partial council progress observed.",
       ],
     };
   });
@@ -398,7 +417,8 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
     "multiplexer": { "layout": "zigzag" }
   }`);
 
-  const { commands } = registerHarness();
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const { commands } = registerHarness(commandMessages);
   const command = commands.get("pantheon-doctor");
   const editorWrites: string[] = [];
   const startedAt = Date.now();
@@ -416,7 +436,7 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
       custom: async () => null,
     },
   });
-  const finalText = editorWrites.at(-1) ?? "";
+  const finalText = commandMessages.at(-1)?.content ?? "";
   const normalizedText = finalText
     .replace(new RegExp(escapeRegExp(projectDir), "g"), "<PROJECT_DIR>")
     .replace(new RegExp(escapeRegExp(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc")), "g"), "<PROJECT_CONFIG>")
@@ -425,7 +445,7 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
     .replace(/Workflow state file: (present|not yet created) — .+/g, "Workflow state file: $1 — <WORKFLOW_STATE>")
     .replace(/tmux available: (yes|no)/g, "tmux available: <detected>")
     .replace(/inside tmux: (yes|no)/g, "inside tmux: <detected>");
-  const passed = /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
+  const passed = editorWrites.length === 0 && /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
   return {
     scenarioId: def.id,
     title: def.title,

@@ -26,6 +26,8 @@ test("adapter auto-selection prefers local docs for repo docs queries and expose
         tools.set(tool.name, tool);
       },
       registerCommand() {},
+      registerMessageRenderer() {},
+      sendMessage() {},
       sendUserMessage() {},
       appendEntry() {},
     };

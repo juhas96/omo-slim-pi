@@ -1,10 +1,11 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { buildPantheonCommandOutputLines, formatPantheonCommandOutput, type CommandOutputStatus } from "./ui.js";
+import { buildPantheonCommandOutputLines, formatPantheonCommandOutput, type CommandOutputStatus, type PantheonCommandMessageDetails } from "./ui.js";
 
-export type PantheonPresentationMode = "notify" | "editor-report" | "widget-summary";
+export type PantheonPresentationMode = "notify" | "editor-report" | "widget-summary" | "chat-message";
 
 export const DEFAULT_COMMAND_OUTPUT_WIDGET_KEY = "oh-my-opencode-pi-command-output";
+export const PANTHEON_COMMAND_MESSAGE_TYPE = "pantheon-command-output";
 
 export interface PantheonCommandPresentationOptions {
   status?: CommandOutputStatus;
@@ -13,6 +14,7 @@ export interface PantheonCommandPresentationOptions {
   wrapEditor?: boolean;
   widgetKey?: string;
   modes?: PantheonPresentationMode[];
+  dispatchMessage?: (message: { customType: string; content: string; display: boolean; details: PantheonCommandMessageDetails }) => void;
 }
 
 export function presentPantheonCommandEditorOutput(
@@ -24,17 +26,28 @@ export function presentPantheonCommandEditorOutput(
   const status = options?.status ?? "success";
   const summary = options?.summary?.trim();
   const widgetKey = options?.widgetKey ?? DEFAULT_COMMAND_OUTPUT_WIDGET_KEY;
-  const modes = new Set(options?.modes ?? ["widget-summary", "editor-report", "notify"]);
+  const modes = new Set(options?.modes ?? ["widget-summary", "chat-message", "notify"]);
+  const body = text.trim() || "(no output)";
+  const details: PantheonCommandMessageDetails = { command, body, status, summary };
+  const formatted = formatPantheonCommandOutput(command, body, { status, summary });
 
   if (modes.has("widget-summary") && ctx.ui.setWidget) {
-    ctx.ui.setWidget(widgetKey, buildPantheonCommandOutputLines(ctx, command, text, { status, summary }), { placement: "belowEditor" });
+    ctx.ui.setWidget(widgetKey, buildPantheonCommandOutputLines(ctx, command, body, { status, summary }), { placement: "belowEditor" });
+  }
+  if (modes.has("chat-message") && options?.dispatchMessage) {
+    options.dispatchMessage({
+      customType: PANTHEON_COMMAND_MESSAGE_TYPE,
+      content: formatted,
+      display: true,
+      details,
+    });
   }
   if (modes.has("editor-report")) {
-    ctx.ui.setEditorText(options?.wrapEditor === false ? text : formatPantheonCommandOutput(command, text, { status, summary }));
+    ctx.ui.setEditorText(options?.wrapEditor === false ? body : formatted);
   }
   if (modes.has("notify")) {
     ctx.ui.notify(
-      options?.notifyMessage ?? `Loaded ${command} output into editor.`,
+      options?.notifyMessage ?? `Posted ${command} output to chat.`,
       status === "error" ? "error" : status === "warning" ? "warning" : "info",
     );
   }
@@ -56,7 +69,7 @@ export function presentPantheonCommandProgress(
     status: result.isError ? "error" : "warning",
     summary,
     notifyMessage: undefined,
-    modes: options?.modes ?? ["widget-summary", "editor-report"],
+    modes: options?.modes ?? ["widget-summary"],
   });
 }
 

@@ -29,6 +29,8 @@ test("adapter policy supports wildcard allow and deny semantics closer to MCP-st
       on() {},
       registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
       registerCommand() {},
+      registerMessageRenderer() {},
+      sendMessage() {},
       sendUserMessage() {},
     };
     extension(fakePi as never);

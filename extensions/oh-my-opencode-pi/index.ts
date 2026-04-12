@@ -121,6 +121,7 @@ import {
   type RenderTheme,
   renderBackgroundToolCall,
   renderBackgroundToolResult,
+  renderPantheonCommandMessage,
   renderWorkflowToolResult,
   showPantheonSelect,
 } from "./ui.js";
@@ -131,7 +132,12 @@ import {
   type AdapterInvocationLike as AdapterInvocationParams,
 } from "./adapter-selection.js";
 import { buildAdapterPolicyReport, buildConfigReport, buildDoctorReport } from "./reports.js";
-import { presentPantheonCommandEditorOutput, presentPantheonCommandProgress, presentPantheonCommandResult } from "./presentation.js";
+import {
+  PANTHEON_COMMAND_MESSAGE_TYPE,
+  presentPantheonCommandEditorOutput as presentPantheonCommandEditorOutputBase,
+  presentPantheonCommandProgress as presentPantheonCommandProgressBase,
+  presentPantheonCommandResult as presentPantheonCommandResultBase,
+} from "./presentation.js";
 import { smartFetch } from "./smartfetch.js";
 import { checkForPackageUpdates, renderPackageUpdateReport } from "./update-checker.js";
 
@@ -461,11 +467,12 @@ async function streamPantheonCommandProgress(
   summaryPrefix: string,
   executor: (onUpdate: (partial: AgentToolResult<any>) => void) => Promise<AgentToolResult<any>>,
   ctx: ExtensionContext,
+  onProgress: (command: string, partial: AgentToolResult<any>, ctx: ExtensionContext, summary: string) => void,
 ): Promise<AgentToolResult<any>> {
   let updateCount = 0;
   return executor((partial) => {
     updateCount += 1;
-    presentPantheonCommandProgress(command, partial, ctx, `${summaryPrefix} (update ${updateCount})`);
+    onProgress(command, partial, ctx, `${summaryPrefix} (update ${updateCount})`);
     ctx.ui.setStatus(COMMAND_PROGRESS_STATUS_KEY, `${command} streaming… ${updateCount}`);
   }).finally(() => {
     ctx.ui.setStatus(COMMAND_PROGRESS_STATUS_KEY, undefined);
@@ -2288,6 +2295,50 @@ function rememberBackgroundTaskId(ctxCwd: string, config: PantheonConfig, taskId
 }
 
 export default function (pi: ExtensionAPI) {
+  pi.registerMessageRenderer(PANTHEON_COMMAND_MESSAGE_TYPE, (message, { expanded }, theme) => {
+    const details = message.details as { command?: string; body?: string; status?: "success" | "warning" | "error"; summary?: string } | undefined;
+    if (!details?.command || !details?.body) return new Text(typeof message.content === "string" ? message.content : String(message.content ?? ""), 0, 0);
+    return renderPantheonCommandMessage({
+      command: details.command,
+      body: details.body,
+      status: details.status ?? "success",
+      summary: details.summary,
+    }, expanded, theme as RenderTheme & { bg: (color: string, text: string) => string });
+  });
+
+  const presentPantheonCommandEditorOutput = (
+    command: string,
+    text: string,
+    ctx: ExtensionContext,
+    options?: Parameters<typeof presentPantheonCommandEditorOutputBase>[3],
+  ) => presentPantheonCommandEditorOutputBase(command, text, ctx, {
+    ...options,
+    dispatchMessage: (message) => pi.sendMessage(message),
+  });
+
+  const presentPantheonCommandProgress = (
+    command: string,
+    result: AgentToolResult<any> & { isError?: boolean },
+    ctx: ExtensionContext,
+    summary: string,
+    options?: Parameters<typeof presentPantheonCommandProgressBase>[4],
+  ) => presentPantheonCommandProgressBase(command, result, ctx, summary, {
+    ...options,
+    dispatchMessage: (message) => pi.sendMessage(message),
+  });
+
+  const presentPantheonCommandResult = (
+    command: string,
+    result: AgentToolResult<any> & { isError?: boolean },
+    ctx: ExtensionContext,
+    successMessage: string,
+    failureMessage: string,
+    options?: Parameters<typeof presentPantheonCommandResultBase>[5],
+  ) => presentPantheonCommandResultBase(command, result, ctx, successMessage, failureMessage, {
+    ...options,
+    dispatchMessage: (message) => pi.sendMessage(message),
+  });
+
   const orchestratorPrompt = loadOrchestratorPrompt();
   const notifiedTasks = new Set<string>();
   const toolExecutionStarts = new Map<string, { toolName: string; startedAt: number }>();
@@ -2685,7 +2736,7 @@ export default function (pi: ExtensionAPI) {
   async function handlePantheonHooksCommand(_args: string, ctx: ExtensionContext) {
     presentPantheonCommandEditorOutput("/pantheon-hooks", summarizeOrchestrationSnapshot(orchestration.getSnapshot()), ctx, {
       summary: "Pantheon orchestration hook trace",
-      notifyMessage: "Loaded Pantheon orchestration hook trace into editor.",
+      notifyMessage: "Posted Pantheon orchestration hook trace to chat.",
     });
   }
 
@@ -2695,7 +2746,7 @@ export default function (pi: ExtensionAPI) {
     const evalReport = readPantheonEvaluationReport(ctx.cwd, config);
     presentPantheonCommandEditorOutput("/pantheon-stats", renderPantheonStats(stats, evalReport), ctx, {
       summary: "Pantheon usage, reliability, and evaluation statistics",
-      notifyMessage: "Loaded Pantheon stats into editor.",
+      notifyMessage: "Posted Pantheon stats to chat.",
     });
   }
 
@@ -2707,7 +2758,7 @@ export default function (pi: ExtensionAPI) {
     }
     presentPantheonCommandEditorOutput("/pantheon-version", renderPackageUpdateReport(report), ctx, {
       summary: report.updateAvailable ? `Update available: ${report.currentVersion} → ${report.latestVersion}` : `Pantheon version ${report.currentVersion}`,
-      notifyMessage: "Loaded package version report into editor.",
+      notifyMessage: "Posted package version report to chat.",
       status: report.status === "error" ? "error" : report.updateAvailable ? "warning" : report.status === "skipped" ? "warning" : "success",
     });
   }
@@ -2720,7 +2771,7 @@ export default function (pi: ExtensionAPI) {
     }
     presentPantheonCommandEditorOutput("/pantheon-update-check", renderPackageUpdateReport(report, true), ctx, {
       summary: report.updateAvailable ? `Refresh found ${report.latestVersion}` : `Package version check: ${report.status}`,
-      notifyMessage: "Loaded refreshed package version report into editor.",
+      notifyMessage: "Posted refreshed package version report to chat.",
       status: report.status === "error" ? "error" : report.updateAvailable ? "warning" : report.status === "skipped" ? "warning" : "success",
     });
   }
@@ -2780,7 +2831,7 @@ export default function (pi: ExtensionAPI) {
     const summaryText = fs.existsSync(trace.summaryPath) ? fs.readFileSync(trace.summaryPath, "utf8") : "{}";
     presentPantheonCommandEditorOutput("/pantheon-debug", `Trace: ${trace.id}\nDirectory: ${path.join(debugDir, trace.id)}\n\nSummary:\n${summaryText}\n\nEvents:\n${eventText}`, ctx, {
       summary: `Debug trace ${trace.id}`,
-      notifyMessage: `Loaded debug trace ${trace.id} into editor.`,
+      notifyMessage: `Posted debug trace ${trace.id} to chat.`,
     });
   }
 
@@ -2997,9 +3048,9 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     const action = await showPantheonSelect(ctx, `Task ${task.id} actions`, [
-      { value: "watch", label: "Open watch view", description: "Open metadata, heartbeat, and recent logs in the editor." },
-      { value: "result", label: "Open result", description: "Open the final result summary in the editor." },
-      { value: "log", label: "Open log tail", description: "Open recent task logs in the editor." },
+      { value: "watch", label: "Open watch view", description: "Post metadata, heartbeat, and recent logs to chat." },
+      { value: "result", label: "Open result", description: "Post the final result summary to chat." },
+      { value: "log", label: "Open log tail", description: "Post recent task logs to chat." },
       ...(task.status === "queued" || task.status === "running"
         ? [{ value: "cancel", label: "Cancel task", description: "Cancel the active background task." }]
         : []),
@@ -3062,6 +3113,7 @@ export default function (pi: ExtensionAPI) {
       `Council preset ${preset} is running`,
       (onUpdate) => executePantheonCouncilCommand!({ prompt: question, preset }, undefined, onUpdate, ctx),
       ctx,
+      presentPantheonCommandProgress,
     );
     presentPantheonCommandResult("/pantheon-council", result, ctx, `Council completed with preset ${preset}.`, `Council failed with preset ${preset}.`);
   }
@@ -3087,6 +3139,7 @@ export default function (pi: ExtensionAPI) {
       `Delegating to ${agentName}`,
       (onUpdate) => executePantheonDelegateCommand!({ agent: agentName, task, includeProjectAgents: true }, undefined, onUpdate, ctx),
       ctx,
+      presentPantheonCommandProgress,
     );
     presentPantheonCommandResult("/pantheon", result, ctx, `Delegation to ${agentName} completed.`, `Delegation to ${agentName} failed.`);
   }
@@ -3106,6 +3159,7 @@ export default function (pi: ExtensionAPI) {
       `Delegating to ${agentName}`,
       (onUpdate) => executePantheonDelegateCommand!({ agent: agentName, task: taskParts.join(" "), includeProjectAgents: true }, undefined, onUpdate, ctx),
       ctx,
+      presentPantheonCommandProgress,
     );
     presentPantheonCommandResult("/pantheon-as", result, ctx, `Delegation to ${agentName} completed.`, `Delegation to ${agentName} failed.`);
   }
@@ -3423,7 +3477,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("pantheon-debug", {
-    description: "Load a Pantheon debug trace into the editor (latest by default)",
+    description: "Show a Pantheon debug trace in chat (latest by default)",
     handler: handlePantheonDebugCommand,
   });
 

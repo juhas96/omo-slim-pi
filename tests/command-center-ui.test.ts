@@ -5,13 +5,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
-function registerCommands(sentMessages: string[]) {
+function registerCommands(sentMessages: string[], commandMessages: Array<{ content?: string; details?: any }> = []) {
   const commands = new Map<string, any>();
   const fakePi = {
     on() {},
     registerTool() {},
     registerCommand(name: string, spec: any) {
       commands.set(name, spec);
+    },
+    registerMessageRenderer() {},
+    sendMessage(message: { content?: string; details?: any }) {
+      commandMessages.push(message);
     },
     sendUserMessage(message: string) {
       sentMessages.push(message);
@@ -173,7 +177,8 @@ test("pantheon council command executes natively without injecting prompt text i
   process.argv[1] = fakePiScript;
   try {
     const sentMessages: string[] = [];
-    const commands = registerCommands(sentMessages);
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const commands = registerCommands(sentMessages, commandMessages);
     const pantheonCouncil = commands.get("pantheon-council");
     assert.ok(pantheonCouncil?.handler);
 
@@ -198,11 +203,12 @@ test("pantheon council command executes natively without injecting prompt text i
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.ok(editorWrites.length >= 1);
-    assert.match(editorWrites.at(-1) ?? "", /Pantheon command output/);
-    assert.match(editorWrites.at(-1) ?? "", /Command: \/pantheon-council/);
-    assert.match(editorWrites.at(-1) ?? "", /Council preset: quick/);
-    assert.ok(editorWrites.some((text) => /Status: warning/.test(text)));
+    assert.equal(editorWrites.length, 0);
+    assert.equal(commandMessages.length, 1);
+    assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
+    assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-council/);
+    assert.match(commandMessages[0]?.content ?? "", /Council preset: quick/);
+    assert.equal(commandMessages[0]?.details?.status, "success");
     assert.ok(widgetWrites.length > 0);
     assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /PANTHEON COMMAND OUTPUT/);
     assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /SUCCESS/);
@@ -235,7 +241,8 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
   process.argv[1] = fakePiScript;
   try {
     const sentMessages: string[] = [];
-    const commands = registerCommands(sentMessages);
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const commands = registerCommands(sentMessages, commandMessages);
     const pantheonAs = commands.get("pantheon-as");
     assert.ok(pantheonAs?.handler);
 
@@ -259,11 +266,12 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.ok(editorWrites.length >= 1);
-    assert.match(editorWrites.at(-1) ?? "", /Pantheon command output/);
-    assert.match(editorWrites.at(-1) ?? "", /Command: \/pantheon-as/);
-    assert.match(editorWrites.at(-1) ?? "", /ok:Task:/);
-    assert.ok(editorWrites.some((text) => /Status: warning/.test(text)));
+    assert.equal(editorWrites.length, 0);
+    assert.equal(commandMessages.length, 1);
+    assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
+    assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-as/);
+    assert.match(commandMessages[0]?.content ?? "", /ok:Task:/);
+    assert.equal(commandMessages[0]?.details?.status, "success");
     assert.ok(widgetWrites.length > 0);
     assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-as/);
   } finally {
@@ -271,13 +279,14 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
   }
 });
 
-test("pantheon-runtime presents labeled command output in the editor and widget", async () => {
+test("pantheon-runtime presents labeled command output in chat and the widget", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-runtime-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
 
   const sentMessages: string[] = [];
-  const commands = registerCommands(sentMessages);
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
   const pantheonRuntime = commands.get("pantheon-runtime");
   assert.ok(pantheonRuntime?.handler);
 
@@ -301,17 +310,18 @@ test("pantheon-runtime presents labeled command output in the editor and widget"
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Pantheon command output/);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-runtime/);
-  assert.match(editorWrites[0] ?? "", /Pantheon runtime report/);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(commandMessages.length, 1);
+  assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
+  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-runtime/);
+  assert.match(commandMessages[0]?.content ?? "", /Pantheon runtime report/);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /PANTHEON COMMAND OUTPUT/);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /SUCCESS/);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-runtime/);
 });
 
-test("pantheon-config opens a structured config report instead of a plain notification", async () => {
+test("pantheon-config opens a structured config report in chat instead of the editor", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-config-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -321,7 +331,8 @@ test("pantheon-config opens a structured config report instead of a plain notifi
   }`);
 
   const sentMessages: string[] = [];
-  const commands = registerCommands(sentMessages);
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
   const pantheonConfig = commands.get("pantheon-config");
   assert.ok(pantheonConfig?.handler);
 
@@ -345,15 +356,16 @@ test("pantheon-config opens a structured config report instead of a plain notifi
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-config/);
-  assert.match(editorWrites[0] ?? "", /Pantheon config report/);
-  assert.match(editorWrites[0] ?? "", /Background & multiplexer:/);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(commandMessages.length, 1);
+  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-config/);
+  assert.match(commandMessages[0]?.content ?? "", /Pantheon config report/);
+  assert.match(commandMessages[0]?.content ?? "", /Background & multiplexer:/);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-config/);
 });
 
-test("pantheon-adapters opens an adapter policy report", async () => {
+test("pantheon-adapters opens an adapter policy report in chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-adapters-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -362,7 +374,8 @@ test("pantheon-adapters opens an adapter policy report", async () => {
   }`);
 
   const sentMessages: string[] = [];
-  const commands = registerCommands(sentMessages);
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
   const pantheonAdapters = commands.get("pantheon-adapters");
   assert.ok(pantheonAdapters?.handler);
 
@@ -383,13 +396,14 @@ test("pantheon-adapters opens an adapter policy report", async () => {
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-adapters/);
-  assert.match(editorWrites[0] ?? "", /Pantheon adapter policy/);
-  assert.match(editorWrites[0] ?? "", /Allowed adapters:/);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(commandMessages.length, 1);
+  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-adapters/);
+  assert.match(commandMessages[0]?.content ?? "", /Pantheon adapter policy/);
+  assert.match(commandMessages[0]?.content ?? "", /Allowed adapters:/);
 });
 
-test("pantheon-doctor opens a structured health report", async () => {
+test("pantheon-doctor opens a structured health report in chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-doctor-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -399,7 +413,8 @@ test("pantheon-doctor opens a structured health report", async () => {
   }`);
 
   const sentMessages: string[] = [];
-  const commands = registerCommands(sentMessages);
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
   const pantheonDoctor = commands.get("pantheon-doctor");
   assert.ok(pantheonDoctor?.handler);
 
@@ -423,10 +438,11 @@ test("pantheon-doctor opens a structured health report", async () => {
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-doctor/);
-  assert.match(editorWrites[0] ?? "", /Pantheon doctor report/);
-  assert.match(editorWrites[0] ?? "", /Config diagnostics:/);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(commandMessages.length, 1);
+  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-doctor/);
+  assert.match(commandMessages[0]?.content ?? "", /Pantheon doctor report/);
+  assert.match(commandMessages[0]?.content ?? "", /Config diagnostics:/);
   assert.ok(widgetWrites.length > 0);
 });
 
@@ -467,7 +483,8 @@ test("pantheon-task-actions routes task actions through an interactive menu", as
   }, null, 2));
 
   const sentMessages: string[] = [];
-  const commands = registerCommands(sentMessages);
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
   const taskActions = commands.get("pantheon-task-actions");
   assert.ok(taskActions?.handler);
 
@@ -489,12 +506,13 @@ test("pantheon-task-actions routes task actions through an interactive menu", as
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.ok(editorWrites.length >= 1);
-  assert.match(editorWrites.at(-1) ?? "", /Command: \/pantheon-result/);
-  assert.match(editorWrites.at(-1) ?? "", /all done/);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(commandMessages.length, 1);
+  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-result/);
+  assert.match(commandMessages[0]?.content ?? "", /all done/);
 });
 
-test("pantheon-as streams partial command output before the final result", async () => {
+test("pantheon-as streams partial command output in widgets before posting the final result to chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-as-streaming-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -530,11 +548,13 @@ test("pantheon-as streams partial command output before the final result", async
   process.argv[1] = fakePiScript;
   try {
     const sentMessages: string[] = [];
-    const commands = registerCommands(sentMessages);
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const commands = registerCommands(sentMessages, commandMessages);
     const pantheonAs = commands.get("pantheon-as");
     assert.ok(pantheonAs?.handler);
 
     const editorWrites: string[] = [];
+    const widgetWrites: string[][] = [];
     await pantheonAs.handler("fixer Stream a tiny change", {
       cwd: projectDir,
       hasUI: true,
@@ -544,17 +564,20 @@ test("pantheon-as streams partial command output before the final result", async
           editorWrites.push(text);
         },
         setStatus() {},
-        setWidget() {},
+        setWidget(_key: string, lines?: string[]) {
+          if (Array.isArray(lines)) widgetWrites.push(lines);
+        },
         input: async () => "",
         custom: async () => null,
       },
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.ok(editorWrites.length >= 2);
-    assert.ok(editorWrites.some((text) => /Status: warning/.test(text) && /partial:/i.test(text)));
-    assert.match(editorWrites.at(-1) ?? "", /Status: success/);
-    assert.match(editorWrites.at(-1) ?? "", /final:/i);
+    assert.equal(editorWrites.length, 0);
+    assert.equal(commandMessages.length, 1);
+    assert.equal(commandMessages[0]?.details?.status, "success");
+    assert.match(commandMessages[0]?.content ?? "", /final:/i);
+    assert.ok(widgetWrites.some((lines) => /WARNING/.test(lines.join("\n")) && /partial:/i.test(lines.join("\n"))));
   } finally {
     process.argv[1] = originalArgv1;
   }

@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
+import { Box, Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
 import { getBackgroundStatusCounts } from "./background.js";
 import type { PantheonConfig } from "./config.js";
 import type { BackgroundTaskRecord } from "./types.js";
@@ -77,6 +77,13 @@ export function renderWorkflowToolResult(
 
 export type CommandOutputStatus = "success" | "warning" | "error";
 
+export interface PantheonCommandMessageDetails {
+  command: string;
+  body: string;
+  status: CommandOutputStatus;
+  summary?: string;
+}
+
 export function getCommandStatusColor(status: CommandOutputStatus): "success" | "warning" | "error" {
   return status === "success" ? "success" : status === "error" ? "error" : "warning";
 }
@@ -123,20 +130,43 @@ export function buildPantheonCommandOutputLines(
 ): string[] {
   const fg = ctx.ui?.theme?.fg?.bind(ctx.ui.theme) ?? ((_color: string, text: string) => text);
   const bold = ctx.ui?.theme?.bold?.bind(ctx.ui.theme) ?? ((text: string) => text);
-  const status = options?.status ?? "success";
+  return buildPantheonCommandMessageLines({ fg, bold }, { command, body, status: options?.status ?? "success", summary: options?.summary });
+}
+
+export function buildPantheonCommandMessageLines(
+  theme: RenderTheme,
+  details: PantheonCommandMessageDetails,
+  options?: { expanded?: boolean; maxPreview?: number },
+): string[] {
+  const status = details.status ?? "success";
   const statusColor = getCommandStatusColor(status);
   const statusLabel = getCommandStatusLabel(status);
-  const summary = options?.summary?.trim();
-  const outputPreview = firstMeaningfulLine(body);
+  const summary = details.summary?.trim();
+  const maxPreview = Math.max(80, options?.maxPreview ?? 120);
+  const output = details.body.trim() || "(no output)";
+  const outputPreview = firstMeaningfulLine(output);
   const lines = [
-    buildPantheonStatusBanner({ fg, bold }, status, "Pantheon command output"),
-    `${fg("toolTitle", bold(command))} ${fg(statusColor, bold(`• ${statusLabel}`))}`,
-    summary ? fg(statusColor, bold(previewText(summary, 120))) : fg("accent", previewText(outputPreview, 120)),
+    buildPantheonStatusBanner(theme, status, "Pantheon command output"),
+    `${theme.fg("toolTitle", theme.bold(details.command))} ${theme.fg(statusColor, theme.bold(`• ${statusLabel}`))}`,
+    summary ? theme.fg(statusColor, theme.bold(previewText(summary, maxPreview))) : theme.fg("accent", previewText(outputPreview, maxPreview)),
   ];
-  if (!summary || previewText(summary, 120) !== previewText(outputPreview, 120)) {
-    lines.push(`${fg("accent", bold("Output preview:"))} ${fg("accent", previewText(outputPreview, 120))}`);
+  if (options?.expanded) {
+    lines.push("");
+    lines.push(output);
+  } else if (!summary || previewText(summary, maxPreview) !== previewText(outputPreview, maxPreview)) {
+    lines.push(`${theme.fg("accent", theme.bold("Output preview:"))} ${theme.fg("accent", previewText(outputPreview, maxPreview))}`);
   }
   return lines;
+}
+
+export function renderPantheonCommandMessage(
+  details: PantheonCommandMessageDetails,
+  expanded: boolean,
+  theme: RenderTheme & { bg: (color: string, text: string) => string },
+): Box {
+  const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+  box.addChild(new Text(buildPantheonCommandMessageLines(theme, details, { expanded, maxPreview: expanded ? 160 : 120 }).join("\n"), 0, 0));
+  return box;
 }
 
 export function buildPantheonDashboardLines(

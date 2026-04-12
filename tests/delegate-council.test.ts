@@ -13,6 +13,8 @@ function registerTools() {
       tools.set(tool.name, tool);
     },
     registerCommand() {},
+    registerMessageRenderer() {},
+    sendMessage() {},
     sendUserMessage() {},
   };
   extension(fakePi as never);
