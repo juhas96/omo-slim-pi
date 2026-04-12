@@ -16,29 +16,34 @@
 
 ### Quick start
 
-Project-local install:
+Project-local install from npm:
 
 ```bash
-pi install -l /absolute/path/to/oh-my-opencode-pi
+pi install -l npm:oh-my-opencode-pi
 ```
 
-Global install:
+Global install from npm:
 
 ```bash
-pi install /absolute/path/to/oh-my-opencode-pi
+pi install npm:oh-my-opencode-pi
+```
+
+You can also pin a version explicitly:
+
+```bash
+pi install -l npm:oh-my-opencode-pi@<version>
 ```
 
 Standalone installer / bootstrap CLI:
 
 The generated config includes explicit OpenAI defaults for delegated specialists and a `review-board` council preset. The top-level pi session model still comes from pi itself.
 
-
 ```bash
-node ./bin/oh-my-opencode-pi.mjs install --cwd /path/to/project --tmux=yes --skills=yes
-node ./bin/oh-my-opencode-pi.mjs verify --cwd /path/to/project
+npx oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
+npx oh-my-opencode-pi verify --cwd /path/to/project
 ```
 
-When installed from npm, the `oh-my-opencode-pi` binary is available directly.
+If you installed the package globally and have the binary on your `PATH`, you can run `oh-my-opencode-pi ...` directly.
 
 ### ✅ Verify your setup
 
@@ -151,7 +156,7 @@ Bundled agents:
 
 | Doc | Contents |
 |-----|----------|
-| [Installation Guide](docs/installation.md) | `pi install`, installer CLI, bootstrap flow, verification, troubleshooting |
+| [Installation Guide](docs/installation.md) | npm-based `pi install`, installer CLI, bootstrap flow, verification, troubleshooting |
 | [Provider Configurations](docs/provider-configurations.md) | Pi model strings, mixed-provider presets, per-agent overrides, council diversity |
 | [Quick Reference](docs/quick-reference.md) | Docs index and suggested reading order |
 

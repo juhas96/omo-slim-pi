@@ -16,13 +16,19 @@ Complete installation instructions for `oh-my-opencode-pi`.
 
 ## Project-local install
 
-Install the package into the current repository so only that project sees the Pantheon extension, prompts, and bundled skills:
+Install the published npm package into the current repository so only that project sees the Pantheon extension, prompts, and bundled skills:
 
 ```bash
-pi install -l /absolute/path/to/oh-my-opencode-pi
+pi install -l npm:oh-my-opencode-pi
 ```
 
 This is the best default when you want the port enabled for one repository without changing your global pi setup.
+
+To pin a specific release:
+
+```bash
+pi install -l npm:oh-my-opencode-pi@<version>
+```
 
 ---
 
@@ -31,7 +37,7 @@ This is the best default when you want the port enabled for one repository witho
 Install it once for your whole pi environment:
 
 ```bash
-pi install /absolute/path/to/oh-my-opencode-pi
+pi install npm:oh-my-opencode-pi
 ```
 
 Use global install when you want Pantheon available in every repository you open with pi.
@@ -44,13 +50,12 @@ This package also ships a small installer/onboarding CLI for creating project-lo
 
 The generated config includes explicit OpenAI defaults for delegated specialists (`oracle`, `explorer`, `librarian`, `designer`, `fixer`) plus a `review-board` council preset. The top-level pi session model still comes from pi itself.
 
-
 ```bash
-node ./bin/oh-my-opencode-pi.mjs install --cwd /path/to/project --tmux=yes --skills=yes
-node ./bin/oh-my-opencode-pi.mjs verify --cwd /path/to/project
+npx oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
+npx oh-my-opencode-pi verify --cwd /path/to/project
 ```
 
-If installed from npm and the binary is on your `PATH`, the same commands work as:
+If you installed the package globally and the binary is on your `PATH`, the same commands work as:
 
 ```bash
 oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
