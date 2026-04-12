@@ -65,6 +65,8 @@ export interface PantheonConfig {
     layout?: "tiled" | "even-horizontal" | "even-vertical" | "main-horizontal" | "main-vertical";
     focusOnSpawn?: boolean;
     keepPaneOnFinish?: boolean;
+    reuseWindow?: boolean;
+    windowName?: string;
   };
   research?: {
     timeoutMs?: number;
@@ -90,6 +92,7 @@ export interface PantheonConfig {
     disabled?: string[];
     defaultAllow?: string[];
     defaultDeny?: string[];
+    modules?: string[];
   };
   delegation?: {
     maxDepth?: number;
@@ -303,6 +306,10 @@ function normalizeConfigPaths(value: unknown, baseDir: string): unknown {
       result[key] = child.filter(isNonEmptyString).map((item) => path.isAbsolute(item) ? item : path.resolve(baseDir, item));
       continue;
     }
+    if (key === "modules" && Array.isArray(child)) {
+      result[key] = child.filter(isNonEmptyString).map((item) => path.isAbsolute(item) ? item : path.resolve(baseDir, item));
+      continue;
+    }
     result[key] = normalizeConfigPaths(child, baseDir);
   }
   return result;
@@ -497,6 +504,8 @@ function getDefaultConfig(): PantheonConfig {
       layout: "main-vertical",
       focusOnSpawn: false,
       keepPaneOnFinish: false,
+      reuseWindow: true,
+      windowName: "pantheon-bg",
     },
     research: {
       timeoutMs: 15000,
@@ -522,6 +531,7 @@ function getDefaultConfig(): PantheonConfig {
       disabled: [],
       defaultAllow: [],
       defaultDeny: [],
+      modules: [],
     },
     delegation: {
       maxDepth: 3,
@@ -638,6 +648,8 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     }
     if (typeof input.multiplexer.focusOnSpawn === "boolean") config.multiplexer!.focusOnSpawn = input.multiplexer.focusOnSpawn;
     if (typeof input.multiplexer.keepPaneOnFinish === "boolean") config.multiplexer!.keepPaneOnFinish = input.multiplexer.keepPaneOnFinish;
+    if (typeof input.multiplexer.reuseWindow === "boolean") config.multiplexer!.reuseWindow = input.multiplexer.reuseWindow;
+    if (isNonEmptyString(input.multiplexer.windowName)) config.multiplexer!.windowName = input.multiplexer.windowName.trim();
   }
 
   if (isObject(input.research)) {
@@ -676,6 +688,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     config.adapters!.disabled = sanitizeStringArray(input.adapters.disabled) ?? config.adapters!.disabled;
     config.adapters!.defaultAllow = sanitizeStringArray(input.adapters.defaultAllow) ?? config.adapters!.defaultAllow;
     config.adapters!.defaultDeny = sanitizeStringArray(input.adapters.defaultDeny) ?? config.adapters!.defaultDeny;
+    config.adapters!.modules = sanitizeStringArray(input.adapters.modules) ?? config.adapters!.modules;
   }
 
   if (isObject(input.delegation)) {

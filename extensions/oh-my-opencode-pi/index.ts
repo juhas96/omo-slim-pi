@@ -1,11 +1,11 @@
 import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
+import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
   type AgentConfig,
@@ -15,6 +15,7 @@ import {
 import {
   type CouncilMemberConfig,
   type PantheonConfig,
+  findNearestProjectPath,
   listConfigPresetNames,
   listCouncilPresetNames,
   loadPantheonConfig,
@@ -22,11 +23,11 @@ import {
   resolveCouncilPreset,
 } from "./config.js";
 import {
+  attachAllBackgroundTaskPanes,
   attachBackgroundTaskPane,
   cancelBackgroundTask,
   cleanupBackgroundArtifacts,
   closeTmuxPane,
-  getBackgroundStatusCounts,
   launchBackgroundTask,
   listBackgroundTasks,
   maybeStartQueuedTasks,
@@ -54,13 +55,60 @@ import {
   LspPositionParams,
   LspReferencesParams,
   LspRenameParams,
+  LspSymbolsParams,
+  findImplementations,
   findReferences,
   getDiagnostics,
+  getTypeDefinitions,
   gotoDefinition,
+  hoverSymbol,
+  listSymbols,
   renameSymbol,
 } from "./tools/lsp.js";
 import { RepoMapParams, buildRepoMap } from "./tools/cartography.js";
+import { CodeMapParams, buildCodeMap } from "./tools/codemap.js";
+import { ApplyPatchParams, applyUnifiedPatch } from "./tools/patch.js";
+import {
+  type DebugTraceContext,
+  type SubagentDebugContext,
+  appendDebugEvent,
+  createDebugTrace,
+  createSubagentDebugContext,
+  listDebugTraces,
+  resolveDebugLogDir,
+  updateDebugTraceSummary,
+  writeDebugJson,
+  writeDebugText,
+} from "./debug.js";
+import {
+  readPantheonStats,
+  recordAdapterUsage,
+  recordBackgroundStatus,
+  recordCategoryRun,
+  renderPantheonStats,
+} from "./stats.js";
 import type { BackgroundTaskRecord, BackgroundTaskSpec, SingleResult } from "./types.js";
+import {
+  buildInterviewSpec,
+  buildResumeContext,
+  buildWorkflowHints,
+  extractUncheckedTodoItems,
+  hasUncheckedTodos,
+  readWorkflowState,
+  renderWorkflowState,
+  type WorkflowState,
+  updateWorkflowState,
+} from "./workflow.js";
+import { bootstrapPantheonProject, buildBootstrapGuide, buildSpecStudioTemplate } from "./setup.js";
+import {
+  buildPantheonDashboardLines,
+  getTaskStateChip,
+  type RenderTheme,
+  renderBackgroundToolCall,
+  renderBackgroundToolResult,
+  renderWorkflowToolResult,
+  showPantheonSelect,
+} from "./ui.js";
 
 interface DelegateDetails {
   mode: "single" | "parallel" | "chain";
@@ -73,32 +121,6 @@ interface CouncilRunResult {
   master: SingleResult;
   councillors: Array<SingleResult & { memberName: string }>;
 }
-
-interface WorkflowState {
-  updatedAt: number;
-  uncheckedTodos: string[];
-  lastAgentSummary?: string;
-  recentBackgroundTaskIds?: string[];
-}
-
-interface DebugTraceContext {
-  id: string;
-  kind: string;
-  dir: string;
-  eventsPath: string;
-  summaryPath: string;
-}
-
-interface SubagentDebugContext {
-  traceId: string;
-  label: string;
-  dir: string;
-  stdoutPath: string;
-  stderrPath: string;
-  summaryPath: string;
-}
-
-type RenderTheme = Pick<ExtensionContext["ui"]["theme"], "fg" | "bold">;
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -144,213 +166,49 @@ function extractTextFromMessage(message: Message): string {
     .trim();
 }
 
-function countUncheckedTodos(text: string): number {
-  const matches = text.match(/^\s*[-*]\s+\[\s\]\s+/gm);
-  return matches ? matches.length : 0;
-}
-
-function hasUncheckedTodos(text: string): boolean {
-  return countUncheckedTodos(text) > 0;
-}
-
-function buildInterviewSpec(title: string, data: {
-  objective: string;
-  users: string;
-  constraints: string;
-  success: string;
-  notes: string;
-}): string {
-  return `# ${title}\n\n## Objective\n${data.objective}\n\n## Users / Stakeholders\n${data.users}\n\n## Constraints\n${data.constraints}\n\n## Success Criteria\n${data.success}\n\n## Notes\n${data.notes || "-"}\n`;
-}
-
-function extractUncheckedTodoItems(text: string): string[] {
-  return [...text.matchAll(/^\s*[-*]\s+\[\s\]\s+(.+)$/gm)].map((match) => match[1].trim()).filter(Boolean);
-}
-
-function resolveWorkflowStatePath(cwd: string, config: PantheonConfig): string {
-  const configured = config.workflow?.stateFile?.trim() || ".oh-my-opencode-pi-workflow.json";
-  return path.isAbsolute(configured) ? configured : path.join(cwd, configured);
-}
-
-function readWorkflowState(cwd: string, config: PantheonConfig): WorkflowState {
-  const filePath = resolveWorkflowStatePath(cwd, config);
-  try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<WorkflowState>;
-    return {
-      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
-      uncheckedTodos: Array.isArray(parsed.uncheckedTodos) ? parsed.uncheckedTodos.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [],
-      lastAgentSummary: typeof parsed.lastAgentSummary === "string" ? parsed.lastAgentSummary : undefined,
-      recentBackgroundTaskIds: Array.isArray(parsed.recentBackgroundTaskIds) ? parsed.recentBackgroundTaskIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [],
-    };
-  } catch {
-    return { updatedAt: 0, uncheckedTodos: [], recentBackgroundTaskIds: [] };
-  }
-}
-
-function writeWorkflowState(cwd: string, config: PantheonConfig, state: WorkflowState): WorkflowState {
-  const filePath = resolveWorkflowStatePath(cwd, config);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const normalized: WorkflowState = {
-    updatedAt: state.updatedAt || Date.now(),
-    uncheckedTodos: state.uncheckedTodos.filter((item) => item.trim().length > 0),
-    lastAgentSummary: state.lastAgentSummary?.trim() || undefined,
-    recentBackgroundTaskIds: (state.recentBackgroundTaskIds ?? []).filter((item, index, array) => item.trim().length > 0 && array.indexOf(item) === index).slice(-20),
-  };
-  fs.writeFileSync(filePath, JSON.stringify(normalized, null, 2));
-  return normalized;
-}
-
-function updateWorkflowState(cwd: string, config: PantheonConfig, mutate: (state: WorkflowState) => WorkflowState): WorkflowState {
-  const current = readWorkflowState(cwd, config);
-  const next = mutate(current);
-  next.updatedAt = Date.now();
-  return writeWorkflowState(cwd, config, next);
-}
-
-function renderWorkflowState(state: WorkflowState): string {
-  const sections = [
-    `Updated: ${state.updatedAt ? new Date(state.updatedAt).toISOString() : "(never)"}`,
-    state.uncheckedTodos.length > 0 ? `\nUnchecked todos:\n${state.uncheckedTodos.map((item) => `- [ ] ${item}`).join("\n")}` : "\nUnchecked todos:\n(none)",
-    state.lastAgentSummary ? `\nLast agent summary:\n${state.lastAgentSummary}` : undefined,
-    state.recentBackgroundTaskIds && state.recentBackgroundTaskIds.length > 0 ? `\nRecent background task ids:\n${state.recentBackgroundTaskIds.map((item) => `- ${item}`).join("\n")}` : undefined,
-  ].filter((item): item is string => Boolean(item));
-  return sections.join("\n");
-}
-
-function buildResumeContext(state: WorkflowState, tasks: BackgroundTaskRecord[], options?: {
-  maxTasks?: number;
-  includeCompletedBackground?: boolean;
-  includeFailedBackground?: boolean;
-}): string {
-  const maxTasks = Math.max(1, Math.floor(options?.maxTasks ?? 6));
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const prioritized = (state.recentBackgroundTaskIds ?? [])
-    .map((id) => taskById.get(id))
-    .filter((task): task is BackgroundTaskRecord => Boolean(task))
-    .filter((task) => {
-      if (task.status === "completed") return options?.includeCompletedBackground !== false;
-      if (task.status === "failed" || task.status === "cancelled") return options?.includeFailedBackground !== false;
-      return true;
-    });
-
-  const selectedTasks = prioritized.slice(0, maxTasks);
-  const taskLines = selectedTasks.length > 0
-    ? selectedTasks.map((task) => `- ${task.id} [${task.status}] ${task.agent}: ${task.summary ?? previewText(task.task, 120)}`).join("\n")
-    : "- (no recent background tasks selected)";
-
-  return [
-    "Pantheon resume context:",
-    state.uncheckedTodos.length > 0 ? `\nPersisted unchecked todos:\n${state.uncheckedTodos.map((item) => `- [ ] ${item}`).join("\n")}` : "\nPersisted unchecked todos:\n- (none)",
-    state.lastAgentSummary ? `\nLast agent summary:\n${state.lastAgentSummary}` : undefined,
-    `\nRelevant background tasks:\n${taskLines}`,
-    "\nSuggested next step: reconcile remaining todos with completed/failed background work before launching duplicate tasks.",
-  ].filter((item): item is string => Boolean(item)).join("\n");
-}
-
-function buildPantheonDashboardLines(
-  ctx: ExtensionContext,
-  config: PantheonConfig,
-  state: WorkflowState,
-  tasks: BackgroundTaskRecord[],
-  autoContinueEnabled: boolean,
-  configWarnings: number,
-): string[] {
-  const counts = getBackgroundStatusCounts(tasks);
-  const activeTasks = tasks.filter((task) => task.status === "queued" || task.status === "running");
-  const maxTodos = Math.max(1, config.ui?.maxTodos ?? 3);
-  const maxBackgroundTasks = Math.max(1, config.ui?.maxBackgroundTasks ?? 3);
-  const lines: string[] = [];
-
-  const chips = [
-    themeAccent(ctx, "Pantheon"),
-    counts.running > 0 ? ctx.ui.theme.fg("warning", `${counts.running} running`) : undefined,
-    counts.queued > 0 ? ctx.ui.theme.fg("muted", `${counts.queued} queued`) : undefined,
-    counts.failed + counts.cancelled > 0 ? ctx.ui.theme.fg("error", `${counts.failed + counts.cancelled} trouble`) : undefined,
-    state.uncheckedTodos.length > 0 ? ctx.ui.theme.fg("accent", `${state.uncheckedTodos.length} todos`) : undefined,
-    autoContinueEnabled ? ctx.ui.theme.fg("success", "auto on") : ctx.ui.theme.fg("dim", "auto off"),
-    configWarnings > 0 ? ctx.ui.theme.fg("warning", `${configWarnings} warning${configWarnings === 1 ? "" : "s"}`) : undefined,
-  ].filter((item): item is string => Boolean(item));
-  if (chips.length > 0) lines.push(chips.join(ctx.ui.theme.fg("dim", " • ")));
-
-  for (const task of activeTasks.slice(0, maxBackgroundTasks)) {
-    lines.push(`${getTaskStateChip(task.status, { fg: ctx.ui.theme.fg.bind(ctx.ui.theme), bold: ctx.ui.theme.bold.bind(ctx.ui.theme) })} ${ctx.ui.theme.fg("accent", task.agent)} ${ctx.ui.theme.fg("dim", task.id)} ${ctx.ui.theme.fg("muted", previewText(task.summary ?? task.task, 70))}`);
-  }
-  if (activeTasks.length > maxBackgroundTasks) {
-    lines.push(ctx.ui.theme.fg("dim", `… +${activeTasks.length - maxBackgroundTasks} more active background task${activeTasks.length - maxBackgroundTasks === 1 ? "" : "s"}`));
-  }
-
-  for (const todo of state.uncheckedTodos.slice(0, maxTodos)) {
-    lines.push(`${ctx.ui.theme.fg("muted", "☐")} ${previewText(todo, 96)}`);
-  }
-  if (state.uncheckedTodos.length > maxTodos) {
-    lines.push(ctx.ui.theme.fg("dim", `… +${state.uncheckedTodos.length - maxTodos} more persisted todo${state.uncheckedTodos.length - maxTodos === 1 ? "" : "s"}`));
-  }
-
-  return lines;
-}
-
-function themeAccent(ctx: ExtensionContext, text: string): string {
-  return ctx.ui.theme.fg("accent", ctx.ui.theme.bold(text));
-}
-
-function taskLooksMultiStep(prompt: string): boolean {
-  const lower = prompt.toLowerCase();
-  return /\b(and|then|also|plus|along with|end-to-end|migration|roadmap|plan|audit|refactor|overhaul)\b/.test(lower)
-    || /\b\d+\.|\n-\s|\n\*\s/.test(prompt)
-    || prompt.length > 260;
-}
-
-function buildWorkflowHints(prompt: string, config: PantheonConfig, activeBackgroundTasks: number, state?: WorkflowState): string {
-  const lower = prompt.toLowerCase();
-  const hints: string[] = [];
-
-  if ((config.workflow?.phaseReminders ?? true) && taskLooksMultiStep(prompt)) {
-    if (/\b(debug|bug|failure|flaky|error|regression)\b/.test(lower)) {
-      hints.push("Phase reminder: reproduce → isolate → fix → verify.");
-    } else if (/\b(refactor|migration|rewrite|overhaul)\b/.test(lower)) {
-      hints.push("Phase reminder: map current state → plan bounded changes → implement incrementally → verify.");
-    } else {
-      hints.push("Phase reminder: scout → plan → implement → verify.");
-    }
-  }
-
-  if (/\b(doc|docs|documentation|api|sdk|library|version|changelog|official|readme)\b/.test(lower)) {
-    hints.push("Use `pantheon_delegate` with `librarian` when library or API behavior matters.");
-  }
-  if (/\b(find|where|which file|entrypoint|trace|search|locate|recon|explore|map the codebase)\b/.test(lower)) {
-    hints.push("Use `pantheon_delegate` with `explorer` for reconnaissance before opening many files yourself.");
-  }
-  if (/\b(ui|ux|design|css|layout|responsive|accessibility|a11y|animation|visual)\b/.test(lower)) {
-    hints.push("Use `pantheon_delegate` with `designer` for user-facing polish or frontend ergonomics.");
-  }
-  if (/\b(architecture|trade-?off|should we|security|risky|ambiguous|decision|review|debug)\b/.test(lower)) {
-    hints.push("Use `pantheon_delegate` with `oracle` or `pantheon_council` when the task is high-stakes or ambiguous.");
-  }
-  if (/\b(implement|change|edit|patch|refactor|fix|add tests|write tests|ship)\b/.test(lower)) {
-    hints.push("Use `pantheon_delegate` with `fixer` for bounded implementation-heavy work after requirements are clear.");
-  }
-  if (taskLooksMultiStep(prompt)) {
-    hints.push("Break complex work into explicit todos and parallelize independent research or implementation when safe.");
-    if (!(config.autoContinue?.enabled ?? false)) {
-      hints.push("If you create a multi-step todo list, consider enabling auto-continue with `/pantheon-auto-continue on` or `pantheon_auto_continue`.");
-    }
-  }
-  if ((config.workflow?.backgroundAwareness ?? true) && activeBackgroundTasks > 0) {
-    hints.push(`There ${activeBackgroundTasks === 1 ? "is" : "are"} ${activeBackgroundTasks} active Pantheon background task${activeBackgroundTasks === 1 ? "" : "s"}; check ` + "`pantheon_background_status` before duplicating work.");
-  }
-  if ((state?.uncheckedTodos.length ?? 0) > 0) {
-    hints.push(`There ${state!.uncheckedTodos.length === 1 ? "is" : "are"} ${state!.uncheckedTodos.length} persisted unchecked todo${state!.uncheckedTodos.length === 1 ? "" : "s"} from earlier work; reconcile them before starting duplicate work.`);
-  }
-
-  const uniqueHints = hints.filter((hint, index) => hints.indexOf(hint) === index);
-  if (uniqueHints.length === 0) return "";
-  return `\n\n<PantheonWorkflowHints>\n${uniqueHints.map((hint) => `- ${hint}`).join("\n")}\n</PantheonWorkflowHints>`;
-}
-
 function previewText(text: string, max = 180): string {
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max)}…`;
+}
+
+function buildRuntimeParityReport(ctx: ExtensionContext, config: PantheonConfig): string {
+  const activeHooks = [
+    "session_start",
+    "session_shutdown",
+    "input",
+    "turn_start",
+    "before_agent_start",
+    "tool_call",
+    "tool_result",
+    "agent_end",
+  ];
+  const supportedInterception = [
+    "Prompt injection via before_agent_start",
+    "Pre-tool mutation/blocking via tool_call",
+    "Post-tool mutation/guidance via tool_result",
+    "Session lifecycle state via session_start/session_shutdown",
+    "Turn-level guidance via turn_start",
+  ];
+  const runtimeGaps = [
+    "No OpenCode agent registry integration",
+    "No exact OpenCode apply_patch interception semantics",
+    "No full OpenCode provider/runtime parity",
+    "Some detached-session behaviors still require tmux/workflow approximations",
+  ];
+  return [
+    `Pantheon runtime report`,
+    `cwd: ${ctx.cwd}`,
+    `subagent: ${process.env[SUBAGENT_ENV] === "1" ? "yes" : "no"}`,
+    `delegation depth: ${process.env[DEPTH_ENV] ?? "0"}/${config.delegation?.maxDepth ?? 3}`,
+    `dashboard widget: ${config.ui?.dashboardWidget === false ? "disabled" : "enabled"}`,
+    `debug tracing: ${config.debug?.enabled === false ? "disabled" : "enabled"}`,
+    `workflow hints: ${config.workflow?.injectHints === false ? "disabled" : "enabled"}`,
+    `\nActive hooks:\n${activeHooks.map((hook) => `- ${hook}`).join("\n")}`,
+    `\nSupported interception points:\n${supportedInterception.map((item) => `- ${item}`).join("\n")}`,
+    `\nKnown runtime parity gaps:\n${runtimeGaps.map((item) => `- ${item}`).join("\n")}`,
+    `\nReference: docs/runtime-parity.md`,
+  ].join("\n");
 }
 
 function getResultState(result: SingleResult): { icon: string; color: "success" | "warning" | "error" } {
@@ -487,91 +345,6 @@ function ensureDir(dirPath: string): string {
 
 function randomId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function safeDebugName(value: string): string {
-  const cleaned = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-  return cleaned || "trace";
-}
-
-function resolveDebugLogDir(cwd: string, config: PantheonConfig): string {
-  const configured = config.debug?.logDir?.trim() || ".oh-my-opencode-pi-debug";
-  return ensureDir(path.isAbsolute(configured) ? configured : path.join(cwd, configured));
-}
-
-function writeDebugText(filePath: string, text: string): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, text, "utf8");
-}
-
-function writeDebugJson(filePath: string, value: unknown): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
-}
-
-function createDebugTrace(cwd: string, config: PantheonConfig, kind: string, payload: Record<string, unknown>): DebugTraceContext | undefined {
-  if (config.debug?.enabled === false) return undefined;
-  const id = randomId(`trace_${safeDebugName(kind)}`);
-  const dir = ensureDir(path.join(resolveDebugLogDir(cwd, config), id));
-  const trace: DebugTraceContext = {
-    id,
-    kind,
-    dir,
-    eventsPath: path.join(dir, "events.ndjson"),
-    summaryPath: path.join(dir, "summary.json"),
-  };
-  writeDebugJson(trace.summaryPath, { id, kind, startedAt: Date.now(), ...payload });
-  writeDebugText(trace.eventsPath, `${JSON.stringify({ ts: Date.now(), type: "trace_start", kind, payload })}\n`);
-  return trace;
-}
-
-function appendDebugEvent(trace: DebugTraceContext | undefined, type: string, payload: Record<string, unknown>): void {
-  if (!trace) return;
-  writeDebugText(trace.eventsPath, `${JSON.stringify({ ts: Date.now(), type, ...payload })}\n`);
-}
-
-function updateDebugTraceSummary(trace: DebugTraceContext | undefined, payload: Record<string, unknown>): void {
-  if (!trace) return;
-  const current = fs.existsSync(trace.summaryPath)
-    ? JSON.parse(fs.readFileSync(trace.summaryPath, "utf8")) as Record<string, unknown>
-    : {};
-  writeDebugJson(trace.summaryPath, { ...current, ...payload });
-}
-
-function createSubagentDebugContext(
-  trace: DebugTraceContext | undefined,
-  label: string,
-  payload: Record<string, unknown>,
-): SubagentDebugContext | undefined {
-  if (!trace) return undefined;
-  const dir = ensureDir(path.join(trace.dir, safeDebugName(label)));
-  const debug: SubagentDebugContext = {
-    traceId: trace.id,
-    label,
-    dir,
-    stdoutPath: path.join(dir, "stdout.ndjson"),
-    stderrPath: path.join(dir, "stderr.log"),
-    summaryPath: path.join(dir, "summary.json"),
-  };
-  writeDebugJson(debug.summaryPath, { label, traceId: trace.id, startedAt: Date.now(), ...payload });
-  appendDebugEvent(trace, "subagent_start", { label, dir, ...payload });
-  return debug;
-}
-
-function listDebugTraces(debugDir: string): Array<{ id: string; summaryPath: string; summary?: Record<string, unknown> }> {
-  if (!fs.existsSync(debugDir)) return [];
-  return fs.readdirSync(debugDir)
-    .map((entry) => {
-      const summaryPath = path.join(debugDir, entry, "summary.json");
-      if (!fs.existsSync(summaryPath)) return undefined;
-      try {
-        return { id: entry, summaryPath, summary: JSON.parse(fs.readFileSync(summaryPath, "utf8")) as Record<string, unknown> };
-      } catch {
-        return { id: entry, summaryPath, summary: undefined };
-      }
-    })
-    .filter((item): item is { id: string; summaryPath: string; summary?: Record<string, unknown> } => Boolean(item))
-    .sort((a, b) => Number(b.summary?.finishedAt ?? b.summary?.startedAt ?? 0) - Number(a.summary?.finishedAt ?? a.summary?.startedAt ?? 0));
 }
 
 async function mapWithConcurrencyLimit<TIn, TOut>(
@@ -988,6 +761,15 @@ const InterviewParams = Type.Object({
   title: Type.Optional(Type.String({ description: "Specification title" })),
 });
 
+const BootstrapParams = Type.Object({
+  force: Type.Optional(Type.Boolean({ description: "Overwrite bootstrap files if they already exist.", default: false })),
+});
+
+const SpecTemplateParams = Type.Object({
+  kind: Type.String({ description: "Template kind: feature, refactor, investigation, or incident." }),
+  title: Type.String({ description: "Specification title." }),
+});
+
 const GithubFileParams = Type.Object({
   repo: Type.String({ description: "GitHub repo in owner/name form" }),
   path: Type.String({ description: "Path inside the repo" }),
@@ -1040,6 +822,9 @@ const ResumeContextParams = Type.Object({
   includeCompletedBackground: Type.Optional(Type.Boolean({ description: "Include completed background tasks", default: true })),
   includeFailedBackground: Type.Optional(Type.Boolean({ description: "Include failed/cancelled background tasks", default: true })),
 });
+
+const RuntimeInfoParams = Type.Object({});
+const StatsParams = Type.Object({});
 
 const BackgroundOverviewParams = Type.Object({
   maxRecent: Type.Optional(Type.Number({ description: "Maximum recent tasks to include", default: 8 })),
@@ -1447,6 +1232,34 @@ interface PantheonAdapter {
   fetch(params: AdapterInvocationParams, config: PantheonConfig, signal?: AbortSignal): Promise<AdapterSummary>;
 }
 
+interface PantheonAdapterModuleContext {
+  cwd: string;
+  config: PantheonConfig;
+  signal?: AbortSignal;
+  helpers: {
+    previewText(text: string, max?: number): string;
+    fetchText(url: string, signal?: AbortSignal): Promise<string>;
+    fetchJson<T>(url: string, signal?: AbortSignal, extraHeaders?: Record<string, string>): Promise<T>;
+    webSearch(query: string, options?: { scope?: string; site?: string; repo?: string; maxResults?: number }, signal?: AbortSignal): Promise<string>;
+    webSearchResults(query: string, options?: { scope?: string; site?: string; repo?: string; maxResults?: number }, signal?: AbortSignal): Promise<Array<{ title: string; url: string; snippet?: string }>>;
+    resolveDocsSources(packageName?: string, version?: string, repo?: string, site?: string, signal?: AbortSignal): Promise<{ packageName?: string; repo?: string; homepage?: string; docsSite?: string; candidates: Array<{ label: string; url: string }> }>;
+    fetchDocsEntry(params: AdapterInvocationParams, signal?: AbortSignal): Promise<string>;
+    fetchGithubFile(repo: string, filePath: string, ref?: string, signal?: AbortSignal): Promise<string>;
+    fetchGithubReleases(repo: string, limit?: number, signal?: AbortSignal): Promise<string>;
+    fetchNpmInfo(pkg: string, version?: string, signal?: AbortSignal): Promise<string>;
+    fetchPackageDocs(pkg: string, version?: string, maxChars?: number, signal?: AbortSignal): Promise<string>;
+    htmlToText(text: string): string;
+  };
+}
+
+interface PantheonAdapterModuleShape {
+  id: string;
+  label?: string;
+  description?: string;
+  search?: (params: AdapterInvocationParams, ctx: PantheonAdapterModuleContext) => Promise<AdapterSummary | string> | AdapterSummary | string;
+  fetch?: (params: AdapterInvocationParams, ctx: PantheonAdapterModuleContext) => Promise<AdapterSummary | string> | AdapterSummary | string;
+}
+
 async function searchGrepApp(
   query: string,
   timeoutMs: number,
@@ -1479,7 +1292,176 @@ function getCurrentPantheonAgent(): string | undefined {
   return value ? value : undefined;
 }
 
-function getEffectiveAdapters(config: PantheonConfig): PantheonAdapter[] {
+function buildAdapterModuleContext(cwd: string, config: PantheonConfig, signal?: AbortSignal): PantheonAdapterModuleContext {
+  const timeoutMs = config.research?.timeoutMs ?? 15000;
+  const userAgent = config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0";
+  const defaultDocsSite = config.research?.defaultDocsSite;
+  const githubToken = config.research?.githubToken;
+  return {
+    cwd,
+    config,
+    signal,
+    helpers: {
+      previewText,
+      fetchText: (url, nestedSignal) => fetchText(url, timeoutMs, userAgent, nestedSignal ?? signal),
+      fetchJson: <T>(url: string, nestedSignal?: AbortSignal, extraHeaders?: Record<string, string>) => fetchJson<T>(url, timeoutMs, userAgent, nestedSignal ?? signal, extraHeaders),
+      webSearch: (query, options, nestedSignal) => webSearch(query, timeoutMs, userAgent, Math.max(1, Math.min(10, Math.floor(options?.maxResults ?? config.research?.maxResults ?? 5))), nestedSignal ?? signal, options?.scope, options?.site, options?.repo, defaultDocsSite),
+      webSearchResults: (query, options, nestedSignal) => webSearchResults(query, timeoutMs, userAgent, Math.max(1, Math.min(10, Math.floor(options?.maxResults ?? config.research?.maxResults ?? 5))), nestedSignal ?? signal, options?.scope, options?.site, options?.repo, defaultDocsSite),
+      resolveDocsSources: (packageName, version, repo, site, nestedSignal) => resolveDocsSources(packageName, version, repo, site, timeoutMs, userAgent, nestedSignal ?? signal),
+      fetchDocsEntry: (params, nestedSignal) => fetchDocsEntry(params, timeoutMs, userAgent, nestedSignal ?? signal, params.maxChars ?? 12000),
+      fetchGithubFile: (repo, filePath, ref, nestedSignal) => fetchGithubFile(repo, filePath, ref, timeoutMs, userAgent, nestedSignal ?? signal, githubToken),
+      fetchGithubReleases: (repo, limit, nestedSignal) => fetchGithubReleases(repo, limit ?? 5, timeoutMs, userAgent, nestedSignal ?? signal, githubToken),
+      fetchNpmInfo: (pkg, version, nestedSignal) => fetchNpmInfo(pkg, version, timeoutMs, userAgent, nestedSignal ?? signal),
+      fetchPackageDocs: (pkg, version, maxChars, nestedSignal) => fetchPackageDocs(pkg, version, timeoutMs, userAgent, nestedSignal ?? signal, maxChars ?? 12000, githubToken),
+      htmlToText,
+    },
+  };
+}
+
+function coerceAdapterSummary(result: AdapterSummary | string): AdapterSummary {
+  if (typeof result === "string") return { text: result };
+  return result;
+}
+
+function coerceCustomAdapter(modulePath: string, candidate: unknown, cwd: string, config: PantheonConfig): PantheonAdapter {
+  if (!candidate || typeof candidate !== "object") throw new Error(`Adapter module ${modulePath} did not export an object.`);
+  const shape = candidate as PantheonAdapterModuleShape;
+  if (typeof shape.id !== "string" || !shape.id.trim()) throw new Error(`Adapter module ${modulePath} is missing a valid id.`);
+  if (typeof shape.search !== "function" && typeof shape.fetch !== "function") {
+    throw new Error(`Adapter module ${modulePath} must implement search and/or fetch.`);
+  }
+  return {
+    id: shape.id.trim(),
+    label: typeof shape.label === "string" && shape.label.trim() ? shape.label.trim() : shape.id.trim(),
+    description: typeof shape.description === "string" && shape.description.trim() ? shape.description.trim() : `Custom adapter loaded from ${modulePath}`,
+    async search(params, adapterConfig, signal) {
+      if (typeof shape.search !== "function") throw new Error(`Adapter '${shape.id}' does not support search.`);
+      return coerceAdapterSummary(await shape.search(params, buildAdapterModuleContext(cwd, adapterConfig, signal)));
+    },
+    async fetch(params, adapterConfig, signal) {
+      if (typeof shape.fetch !== "function") throw new Error(`Adapter '${shape.id}' does not support fetch.`);
+      return coerceAdapterSummary(await shape.fetch(params, buildAdapterModuleContext(cwd, adapterConfig, signal)));
+    },
+  };
+}
+
+function collectConfiguredAdapterModulePaths(cwd: string, config: PantheonConfig): string[] {
+  const discoveredDirs = [
+    path.join(getAgentDir(), "pantheon-adapters"),
+    findNearestProjectPath(cwd, path.join(".pi", "pantheon-adapters")) ?? undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  const discoveredFiles = discoveredDirs.flatMap((dir) => {
+    try {
+      return fs.readdirSync(dir)
+        .filter((entry) => /\.(mjs|js|cjs)$/i.test(entry))
+        .map((entry) => path.join(dir, entry));
+    } catch {
+      return [];
+    }
+  });
+
+  return [...new Set([...(config.adapters?.modules ?? []), ...discoveredFiles])];
+}
+
+async function loadConfiguredAdapterModules(cwd: string, config: PantheonConfig): Promise<{ adapters: PantheonAdapter[]; errors: string[] }> {
+  const modulePaths = collectConfiguredAdapterModulePaths(cwd, config);
+  const adapters: PantheonAdapter[] = [];
+  const errors: string[] = [];
+  for (const modulePath of modulePaths) {
+    try {
+      if (!fs.existsSync(modulePath)) throw new Error("file not found");
+      const stat = fs.statSync(modulePath);
+      const imported = await import(`${pathToFileURL(modulePath).href}?mtime=${Math.floor(stat.mtimeMs)}`);
+      const candidate = imported.default ?? imported.adapter ?? imported;
+      adapters.push(coerceCustomAdapter(modulePath, candidate, cwd, config));
+    } catch (error) {
+      errors.push(`Adapter module load failed (${modulePath}): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return { adapters, errors };
+}
+
+function searchLocalDocs(cwd: string, query: string, limit: number): AdapterSummary {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const roots = [cwd, path.join(cwd, "docs")];
+  const seen = new Set<string>();
+  const candidates: Array<{ path: string; score: number; excerpt: string }> = [];
+
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    const stack = [root];
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      let entries: fs.Dirent[] = [];
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+        const fullPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(fullPath);
+          continue;
+        }
+        if (!entry.isFile() || !/\.(md|mdx|txt)$/i.test(entry.name)) continue;
+        if (seen.has(fullPath)) continue;
+        seen.add(fullPath);
+        const text = fs.readFileSync(fullPath, "utf8");
+        const lower = text.toLowerCase();
+        let score = 0;
+        for (const term of terms) if (lower.includes(term)) score += 1;
+        if (score === 0) continue;
+        const firstMatch = terms.map((term) => lower.indexOf(term)).filter((index) => index >= 0).sort((a, b) => a - b)[0] ?? 0;
+        const excerpt = previewText(text.slice(Math.max(0, firstMatch - 120), firstMatch + 320), 260);
+        candidates.push({ path: path.relative(cwd, fullPath), score, excerpt });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+  const top = candidates.slice(0, Math.max(1, Math.min(20, Math.floor(limit))));
+  if (top.length === 0) return { text: `Adapter: local-docs\nQuery: ${query}\n\nNo local documentation matches found.` };
+  return {
+    text: `Adapter: local-docs\nQuery: ${query}\n\n${top.map((item, index) => `${index + 1}. ${item.path} (score ${item.score})\n   ${item.excerpt}`).join("\n\n")}`,
+    details: { results: top },
+  };
+}
+
+async function searchGithubCode(
+  repo: string,
+  query: string,
+  timeoutMs: number,
+  userAgent: string,
+  signal?: AbortSignal,
+  githubToken?: string,
+  limit = 5,
+): Promise<AdapterSummary> {
+  const scoped = `${query} repo:${repo}`;
+  const payload = await fetchJson<any>(`https://api.github.com/search/code?q=${encodeURIComponent(scoped)}&per_page=${Math.max(1, Math.min(10, Math.floor(limit)))}`,
+    timeoutMs,
+    userAgent,
+    signal,
+    githubToken?.trim()
+      ? { authorization: `Bearer ${githubToken.trim()}`, accept: "application/vnd.github.text-match+json" }
+      : { accept: "application/vnd.github.text-match+json" },
+  );
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (items.length === 0) return { text: `Adapter: github-code-search\nRepo: ${repo}\nQuery: ${query}\n\nNo code search results found.` };
+  return {
+    text: `Adapter: github-code-search\nRepo: ${repo}\nQuery: ${query}\n\n${items.map((item: any, index: number) => {
+      const fragment = Array.isArray(item.text_matches) && item.text_matches.length > 0
+        ? previewText(item.text_matches.map((match: any) => match.fragment).join(" … "), 240)
+        : "(no excerpt)";
+      return `${index + 1}. ${item.path}\n   ${item.html_url}\n   ${fragment}`;
+    }).join("\n\n")}`,
+    details: { items },
+  };
+}
+
+function getBuiltInAdapters(cwd: string, config: PantheonConfig): PantheonAdapter[] {
   const timeoutMs = config.research?.timeoutMs ?? 15000;
   const userAgent = config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0";
   const defaultDocsSite = config.research?.defaultDocsSite;
@@ -1523,6 +1505,18 @@ function getEffectiveAdapters(config: PantheonConfig): PantheonAdapter[] {
       },
     },
     {
+      id: "local-docs",
+      label: "Local Docs",
+      description: "Search README/docs markdown files inside the current repository before going to external sources.",
+      async search(params) {
+        return searchLocalDocs(cwd, params.query?.trim() || params.topic?.trim() || "", params.limit ?? 5);
+      },
+      async fetch(params) {
+        const result = searchLocalDocs(cwd, params.query?.trim() || params.topic?.trim() || "", 1);
+        return { text: result.text };
+      },
+    },
+    {
       id: "grep-app",
       label: "grep.app",
       description: "Public code search over indexed repositories, similar to grep.app.",
@@ -1548,6 +1542,19 @@ function getEffectiveAdapters(config: PantheonConfig): PantheonAdapter[] {
         return {
           text: await fetchGithubReleases(params.repo.trim(), params.limit ?? 5, timeoutMs, userAgent, signal, githubToken),
         };
+      },
+    },
+    {
+      id: "github-code-search",
+      label: "GitHub Code Search",
+      description: "Structured GitHub code search within a repository.",
+      async search(params, _config, signal) {
+        if (!params.repo?.trim()) throw new Error("github-code-search requires `repo`.");
+        return searchGithubCode(params.repo.trim(), params.query?.trim() || params.topic?.trim() || "", timeoutMs, userAgent, signal, githubToken, params.limit ?? 5);
+      },
+      async fetch(params, _config, signal) {
+        if (!params.repo?.trim() || !params.path?.trim()) throw new Error("github-code-search fetch requires both `repo` and `path`.");
+        return { text: await fetchGithubFile(params.repo.trim(), params.path.trim(), undefined, timeoutMs, userAgent, signal, githubToken) };
       },
     },
     {
@@ -1591,34 +1598,45 @@ function getEffectiveAdapters(config: PantheonConfig): PantheonAdapter[] {
   ];
 }
 
+async function getEffectiveAdapters(cwd: string, config: PantheonConfig): Promise<{ adapters: PantheonAdapter[]; loadErrors: string[] }> {
+  const builtIns = getBuiltInAdapters(cwd, config);
+  const custom = await loadConfiguredAdapterModules(cwd, config);
+  const registry = new Map<string, PantheonAdapter>();
+  for (const adapter of builtIns) registry.set(adapter.id, adapter);
+  for (const adapter of custom.adapters) registry.set(adapter.id, adapter);
+  return { adapters: [...registry.values()], loadErrors: custom.errors };
+}
+
 function selectAdapterIds(config: PantheonConfig, requested: string | undefined, params: AdapterInvocationParams): string[] {
   const requestedId = requested?.trim();
   if (requestedId && requestedId !== "auto") return [requestedId];
-  if (params.url || params.package || params.site || params.topic) return ["docs-context7"];
+  if (params.url || params.package || params.site) return ["docs-context7"];
+  if ((params.query ?? params.topic ?? "").match(/\b(readme|docs|guide|setup|installation|usage)\b/i)) return ["local-docs", "docs-context7", "web-search"];
   if (params.repo && /(release|changelog|version)/i.test(params.query ?? "")) return ["github-releases"];
-  if (params.repo || /(snippet|usage|implementation|example|symbol|pattern|code)/i.test(params.query ?? "")) return ["grep-app", "web-search"];
-  return ["web-search", "docs-context7"];
+  if (params.repo && /(snippet|usage|implementation|example|symbol|pattern|code)/i.test(params.query ?? "")) return ["github-code-search", "grep-app", "web-search"];
+  if (params.repo) return ["local-docs", "github-code-search", "web-search"];
+  return ["local-docs", "web-search", "docs-context7"];
 }
 
-function getAllowedAdapters(config: PantheonConfig): { agentName?: string; adapters: PantheonAdapter[] } {
-  const all = getEffectiveAdapters(config);
+async function getAllowedAdapters(cwd: string, config: PantheonConfig): Promise<{ agentName?: string; adapters: PantheonAdapter[]; registered: PantheonAdapter[]; loadErrors: string[] }> {
+  const loaded = await getEffectiveAdapters(cwd, config);
   const agentName = getCurrentPantheonAgent();
   const policy = resolveAgentAdapterPolicy(config, agentName ?? "interactive");
-  if (policy.disableAll) return { agentName, adapters: [] };
-  const adapters = all.filter((adapter) => {
+  if (policy.disableAll) return { agentName, adapters: [], registered: loaded.adapters, loadErrors: loaded.loadErrors };
+  const adapters = loaded.adapters.filter((adapter) => {
     if (policy.disabled.includes(adapter.id)) return false;
     if (policy.deny.includes(adapter.id)) return false;
     if (policy.allow.length > 0 && !policy.allow.includes(adapter.id)) return false;
     return true;
   });
-  return { agentName, adapters };
+  return { agentName, adapters, registered: loaded.adapters, loadErrors: loaded.loadErrors };
 }
 
-function requireAdapter(config: PantheonConfig, adapterId: string): PantheonAdapter {
-  const { agentName, adapters } = getAllowedAdapters(config);
+async function requireAdapter(cwd: string, config: PantheonConfig, adapterId: string): Promise<PantheonAdapter> {
+  const { agentName, adapters, registered } = await getAllowedAdapters(cwd, config);
   const adapter = adapters.find((item) => item.id === adapterId);
   if (!adapter) {
-    const current = getEffectiveAdapters(config).map((item) => item.id).join(", ");
+    const current = registered.map((item) => item.id).join(", ");
     throw new Error(`Adapter '${adapterId}' is not available for ${agentName ?? "this session"}. Available adapters: ${adapters.map((item) => item.id).join(", ") || "(none)"}. Registered adapters: ${current || "(none)"}.`);
   }
   return adapter;
@@ -1763,62 +1781,6 @@ async function runCouncil(
   return { preset: resolvedPresetName, master, councillors };
 }
 
-function getTaskStateChip(status: BackgroundTaskRecord["status"], theme: RenderTheme): string {
-  if (status === "completed") return theme.fg("success", "✓ completed");
-  if (status === "running") return theme.fg("warning", "… running");
-  if (status === "queued") return theme.fg("muted", "○ queued");
-  if (status === "cancelled") return theme.fg("muted", "— cancelled");
-  return theme.fg("error", "✗ failed");
-}
-
-function formatBackgroundTaskLine(task: BackgroundTaskRecord, theme: RenderTheme, maxPreview = 100): string {
-  return `${getTaskStateChip(task.status, theme)} ${theme.fg("accent", `${task.agent}`)} ${theme.fg("dim", task.id)} ${theme.fg("muted", "—")} ${previewText(task.summary ?? task.task, maxPreview)}`;
-}
-
-function renderBackgroundToolCall(
-  toolName: string,
-  args: { agent?: string; task?: string; taskId?: string },
-  theme: RenderTheme,
-) {
-  const headline = args.agent
-    ? `${theme.fg("toolTitle", theme.bold(toolName))} ${theme.fg("accent", args.agent)}`
-    : `${theme.fg("toolTitle", theme.bold(toolName))} ${theme.fg("accent", args.taskId ?? "request")}`;
-  const detail = args.task ? `\n  ${theme.fg("muted", previewText(args.task, 100))}` : "";
-  return new Text(`${headline}${detail}`, 0, 0);
-}
-
-function renderBackgroundToolResult(
-  toolName: string,
-  result: { content: Array<{ type: string; text?: string }>; details?: BackgroundTaskRecord | BackgroundTaskRecord[] },
-  expanded: boolean,
-  theme: RenderTheme,
-) {
-  const details = result.details;
-  if (!details) {
-    const text = result.content[0]?.type === "text" ? result.content[0].text ?? "(no output)" : "(no output)";
-    return new Text(text, 0, 0);
-  }
-  const tasks = Array.isArray(details) ? details : [details];
-  const lines = [
-    `${theme.fg("toolTitle", theme.bold(toolName))} ${theme.fg("accent", `${tasks.length} task${tasks.length === 1 ? "" : "s"}`)}`,
-  ];
-  const visibleTasks = expanded ? tasks : tasks.slice(0, 6);
-  for (const task of visibleTasks) lines.push(formatBackgroundTaskLine(task, theme, expanded ? 140 : 95));
-  if (!expanded && tasks.length > visibleTasks.length) {
-    lines.push(theme.fg("muted", `… +${tasks.length - visibleTasks.length} more (expand to view all)`));
-  }
-  return new Text(lines.join("\n"), 0, 0);
-}
-
-function renderWorkflowToolResult(
-  toolName: string,
-  title: string,
-  body: string,
-  theme: RenderTheme,
-): Text {
-  return new Text(`${theme.fg("toolTitle", theme.bold(toolName))} ${theme.fg("accent", title)}\n${body}`, 0, 0);
-}
-
 function rememberBackgroundTaskId(ctxCwd: string, config: PantheonConfig, taskId: string): void {
   if (config.workflow?.persistTodos === false) return;
   updateWorkflowState(ctxCwd, config, (state) => ({
@@ -1827,57 +1789,10 @@ function rememberBackgroundTaskId(ctxCwd: string, config: PantheonConfig, taskId
   }));
 }
 
-async function showPantheonSelect(
-  ctx: ExtensionContext,
-  title: string,
-  items: SelectItem[],
-  hint = "↑↓ navigate • enter select • esc cancel",
-): Promise<string | null> {
-  if (!ctx.hasUI) return null;
-  return ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-    const container = new Container();
-    container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-    container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
-
-    const selectList = new SelectList(items, Math.min(Math.max(items.length, 3), 12), {
-      selectedPrefix: (text) => theme.fg("accent", text),
-      selectedText: (text) => theme.fg("accent", text),
-      description: (text) => theme.fg("muted", text),
-      scrollInfo: (text) => theme.fg("dim", text),
-      noMatch: (text) => theme.fg("warning", text),
-    });
-    selectList.onSelect = (item) => done(String(item.value));
-    selectList.onCancel = () => done(null);
-    container.addChild(selectList);
-    container.addChild(new Text(theme.fg("dim", hint), 1, 0));
-    container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-
-    return {
-      render(width: number) {
-        return container.render(width);
-      },
-      invalidate() {
-        container.invalidate();
-      },
-      handleInput(data: string) {
-        selectList.handleInput(data);
-        tui.requestRender();
-      },
-    };
-  }, {
-    overlay: true,
-    overlayOptions: {
-      width: "72%",
-      minWidth: 52,
-      maxHeight: "80%",
-      margin: 1,
-    },
-  });
-}
-
 export default function (pi: ExtensionAPI) {
   const orchestratorPrompt = loadOrchestratorPrompt();
   const notifiedTasks = new Set<string>();
+  const toolExecutionStarts = new Map<string, { toolName: string; startedAt: number }>();
   let poller: ReturnType<typeof setInterval> | undefined;
   let autoContinueEnabled = false;
   let autoContinueCount = 0;
@@ -1934,6 +1849,7 @@ export default function (pi: ExtensionAPI) {
           if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
             if (notifiedTasks.has(task.id)) continue;
             notifiedTasks.add(task.id);
+            recordBackgroundStatus(ctx.cwd, configResult.config, task.status === "completed" ? "completed" : task.status === "cancelled" ? "cancelled" : "failed", `${task.agent}:${task.id}`);
             if (!configResult.config.multiplexer?.keepPaneOnFinish) closeTmuxPane(task.paneId);
             ctx.ui.notify(
               `Background ${task.agent} ${task.status}: ${task.summary ?? task.id}`,
@@ -1967,12 +1883,46 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setStatus(WORKFLOW_GUIDANCE_KEY, "Pantheon phases: scout → plan → implement → verify");
   });
 
+  pi.on("tool_execution_start", async (event) => {
+    toolExecutionStarts.set(event.toolCallId, { toolName: event.toolName, startedAt: Date.now() });
+  });
+
+  pi.on("tool_execution_end", async (event, ctx) => {
+    const started = toolExecutionStarts.get(event.toolCallId);
+    toolExecutionStarts.delete(event.toolCallId);
+    const config = loadPantheonConfig(ctx.cwd).config;
+    const durationMs = started ? Date.now() - started.startedAt : 0;
+
+    if (event.toolName === "pantheon_delegate") {
+      const details = event.result?.details as DelegateDetails | undefined;
+      const agentName = details?.results?.[0]?.agent;
+      recordCategoryRun(ctx.cwd, config, "delegate", event.isError ? "failed" : "success", durationMs, details?.mode ?? "delegate", agentName);
+    }
+    if (event.toolName === "pantheon_council") {
+      recordCategoryRun(ctx.cwd, config, "council", event.isError ? "failed" : "success", durationMs, "council");
+    }
+    if (event.toolName === "pantheon_background" && !event.isError) {
+      const record = event.result?.details as BackgroundTaskRecord | undefined;
+      if (record) recordBackgroundStatus(ctx.cwd, config, "queued", `${record.agent}:${record.id}`);
+    }
+    if (event.toolName === "pantheon_adapter_search") {
+      const adapters = (event.result?.details?.adapters ?? []) as Array<{ adapter: string; error?: string }>;
+      for (const adapter of adapters) recordAdapterUsage(ctx.cwd, config, adapter.adapter, "search", Boolean(adapter.error));
+      recordCategoryRun(ctx.cwd, config, "adapter_search", event.isError ? "failed" : "success", durationMs, "adapter-search");
+    }
+    if (event.toolName === "pantheon_adapter_fetch") {
+      const adapterId = event.result?.details?.adapter as string | undefined;
+      if (adapterId) recordAdapterUsage(ctx.cwd, config, adapterId, "fetch", event.isError);
+      recordCategoryRun(ctx.cwd, config, "adapter_fetch", event.isError ? "failed" : "success", durationMs, adapterId ?? "adapter-fetch");
+    }
+  });
+
   pi.on("tool_result", async (event, ctx) => {
     if (process.env[SUBAGENT_ENV] === "1") return;
     const config = loadPantheonConfig(ctx.cwd).config;
     const now = Date.now();
 
-    if ((config.workflow?.postFileToolNudges ?? true) && !event.isError && ["edit", "write", "pantheon_ast_grep_replace", "pantheon_lsp_rename"].includes(event.toolName)) {
+    if ((config.workflow?.postFileToolNudges ?? true) && !event.isError && ["edit", "write", "pantheon_ast_grep_replace", "pantheon_lsp_rename", "pantheon_apply_patch"].includes(event.toolName)) {
       turnFileMutationCount += 1;
       ctx.ui.setStatus(WORKFLOW_GUIDANCE_KEY, "After file changes: run diagnostics/tests and verify touched paths.");
       if (turnFileMutationCount === 1 && now - lastGuidanceAt > 1500) {
@@ -2115,14 +2065,19 @@ export default function (pi: ExtensionAPI) {
         { value: "resume", label: "Resume prior work", description: "Build a re-entry brief from persisted todos and recent background tasks." },
         { value: "overview", label: "Open overview", description: "See workflow state and background task activity together." },
         { value: "attach", label: "Attach background task pane", description: "Open or reopen a tmux pane for a running task log." },
+        { value: "attach-all", label: "Attach all running panes", description: "Open or reuse panes for all queued/running background tasks in the shared tmux window." },
         { value: "result", label: "Inspect background result", description: "Open the latest result summary for a detached task." },
         { value: "todos", label: "Inspect persisted todos", description: "Review carried-over unchecked tasks from prior work." },
         { value: "retry", label: "Retry background task", description: "Requeue a completed, failed, or cancelled detached task." },
         { value: "spec", label: "Create spec", description: "Run the guided interview flow and draft a spec into the editor." },
+        { value: "spec-studio", label: "Spec studio", description: "Open an editor-first spec template for feature/refactor/investigation work." },
+        { value: "bootstrap", label: "Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
         { value: "debug", label: "Inspect debug trace", description: "Open recent foreground delegation/council traces and inspect why they failed." },
         { value: "agents", label: "List agents", description: "Show bundled and override Pantheon specialists." },
-        { value: "repo-map", label: "Repository map", description: "Build a quick cartography summary for the current workspace." },
+        { value: "repo-map", label: "Repository map", description: "Build a quick filesystem cartography summary for the current workspace." },
+        { value: "code-map", label: "Code map", description: "Build a semantic codemap with entrypoints, imports, and symbols." },
         { value: "skills", label: "Skills setup", description: "Show skill policy guidance and a starter config snippet." },
+        { value: "stats", label: "Stats", description: "Inspect Pantheon usage and reliability statistics." },
         { value: "warnings", label: "Show config warnings", description: "Inspect config validation warnings and active presets." },
       ]);
       if (!action) return;
@@ -2135,6 +2090,14 @@ export default function (pi: ExtensionAPI) {
         pi.sendUserMessage("/pantheon-spec");
         return;
       }
+      if (action === "spec-studio") {
+        pi.sendUserMessage("/pantheon-spec-studio");
+        return;
+      }
+      if (action === "bootstrap") {
+        pi.sendUserMessage("/pantheon-bootstrap");
+        return;
+      }
       if (action === "debug") {
         pi.sendUserMessage("/pantheon-debug");
         return;
@@ -2145,6 +2108,10 @@ export default function (pi: ExtensionAPI) {
       }
       if (action === "result") {
         pi.sendUserMessage("/pantheon-result");
+        return;
+      }
+      if (action === "attach-all") {
+        pi.sendUserMessage("/pantheon-attach-all");
         return;
       }
       if (action === "todos") {
@@ -2173,8 +2140,18 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      if (action === "stats") {
+        pi.sendUserMessage("/pantheon-stats");
+        return;
+      }
+
       if (action === "repo-map") {
         pi.sendUserMessage("Use pantheon_repo_map for the current workspace.");
+        return;
+      }
+
+      if (action === "code-map") {
+        pi.sendUserMessage("Use pantheon_code_map for the current workspace.");
         return;
       }
 
@@ -2288,7 +2265,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("pantheon-repo-map", {
-    description: "Build a repo map / codemap summary for the current workspace",
+    description: "Build a repo map summary for the current workspace",
     handler: async (_args, ctx) => {
       const config = loadPantheonConfig(ctx.cwd).config;
       const result = buildRepoMap(ctx.cwd, {
@@ -2301,18 +2278,49 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("pantheon-code-map", {
+    description: "Build a semantic code map for the current workspace",
+    handler: async (_args, ctx) => {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const result = buildCodeMap(ctx.cwd, {
+        maxFiles: config.skills?.cartography?.maxFiles,
+      });
+      ctx.ui.notify(result.text, "info");
+    },
+  });
+
   pi.registerCommand("pantheon-adapters", {
     description: "List registered Pantheon research adapters and effective policy for this session",
     handler: async (_args, ctx) => {
       const config = loadPantheonConfig(ctx.cwd).config;
-      const { agentName, adapters } = getAllowedAdapters(config);
-      const registered = getEffectiveAdapters(config);
+      const { agentName, adapters, registered, loadErrors } = await getAllowedAdapters(ctx.cwd, config);
       const lines = [
         `Current agent: ${agentName ?? "interactive"}`,
         `Allowed adapters: ${adapters.map((adapter) => adapter.id).join(", ") || "(none)"}`,
         `Registered adapters: ${registered.map((adapter) => `${adapter.id} — ${adapter.description}`).join("\n") || "(none)"}`,
       ];
-      ctx.ui.notify(lines.join("\n"), "info");
+      if (loadErrors.length > 0) lines.push("", "Load errors:", ...loadErrors.map((item) => `- ${item}`));
+      ctx.ui.notify(lines.join("\n"), loadErrors.length > 0 ? "warning" : "info");
+    },
+  });
+
+  pi.registerCommand("pantheon-runtime", {
+    description: "Show current Pantheon runtime/hook parity information",
+    handler: async (_args, ctx) => {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const report = buildRuntimeParityReport(ctx, config);
+      ctx.ui.setEditorText(report);
+      ctx.ui.notify("Loaded Pantheon runtime parity report into editor.", "info");
+    },
+  });
+
+  pi.registerCommand("pantheon-stats", {
+    description: "Show Pantheon usage and reliability statistics",
+    handler: async (_args, ctx) => {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const stats = readPantheonStats(ctx.cwd, config);
+      ctx.ui.setEditorText(renderPantheonStats(stats));
+      ctx.ui.notify("Loaded Pantheon stats into editor.", "info");
     },
   });
 
@@ -2415,6 +2423,37 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("pantheon-spec-studio", {
+    description: "Open an editor-first spec studio template",
+    handler: async (_args, ctx) => {
+      if (!ctx.hasUI) {
+        ctx.ui.notify("/pantheon-spec-studio requires interactive mode", "error");
+        return;
+      }
+      const kind = await showPantheonSelect(ctx, "Spec studio template", [
+        { value: "feature", label: "feature", description: "Product or capability delivery spec." },
+        { value: "refactor", label: "refactor", description: "Architecture or maintainability-driven technical plan." },
+        { value: "investigation", label: "investigation", description: "Unknowns, questions, and research-driven brief." },
+        { value: "incident", label: "incident", description: "Debugging, outage, or remediation plan." },
+      ]);
+      if (!kind) return;
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const title = await ctx.ui.input("Spec title", config.interview?.templateTitle ?? "Project Specification");
+      if (!title?.trim()) return;
+      ctx.ui.setEditorText(buildSpecStudioTemplate(kind, title.trim()));
+      ctx.ui.notify(`Loaded ${kind} spec studio template into editor.`, "info");
+    },
+  });
+
+  pi.registerCommand("pantheon-bootstrap", {
+    description: "Scaffold project-local Pantheon config and starter directories",
+    handler: async (_args, ctx) => {
+      const result = bootstrapPantheonProject(ctx.cwd);
+      ctx.ui.setEditorText(buildBootstrapGuide(ctx.cwd, result.files));
+      ctx.ui.notify(result.files.length > 0 ? `Bootstrapped Pantheon project files in ${result.rootDir}.` : "Pantheon bootstrap skipped existing files (use the tool with force to overwrite).", "info");
+    },
+  });
+
   pi.registerCommand("pantheon-as", {
     description: "Route the next task directly to a Pantheon specialist",
     getArgumentCompletions: (prefix) => {
@@ -2482,6 +2521,18 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       ctx.ui.notify(`Attached tmux pane ${updated.paneId} for ${updated.id}.`, "info");
+    },
+  });
+
+  pi.registerCommand("pantheon-attach-all", {
+    description: "Open or reuse tmux panes for all queued/running background tasks",
+    handler: async (_args, ctx) => {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
+      reconcileBackgroundTasks(taskDir, config.multiplexer);
+      const tasks = attachAllBackgroundTaskPanes(listBackgroundTasks(taskDir), config.multiplexer);
+      const active = tasks.filter((task) => task.status === "queued" || task.status === "running");
+      ctx.ui.notify(`Attached/reused panes for ${active.length} active background task${active.length === 1 ? "" : "s"}.`, "info");
     },
   });
 
@@ -3065,6 +3116,29 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "pantheon_spec_template",
+    label: "Pantheon Spec Template",
+    description: "Generate an editor-first spec studio template for feature, refactor, investigation, or incident work.",
+    parameters: SpecTemplateParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      const text = buildSpecStudioTemplate(params.kind, params.title);
+      return { content: [{ type: "text", text }], details: { kind: params.kind, title: params.title } };
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_bootstrap",
+    label: "Pantheon Bootstrap",
+    description: "Scaffold project-local Pantheon config, adapters, prompts, and agents directories.",
+    parameters: BootstrapParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const result = bootstrapPantheonProject(ctx.cwd, { force: params.force });
+      const guide = buildBootstrapGuide(ctx.cwd, result.files);
+      return { content: [{ type: "text", text: guide }], details: result };
+    },
+  });
+
+  pi.registerTool({
     name: "pantheon_lsp_goto_definition",
     label: "Pantheon LSP Definition",
     description: "Locate symbol definitions for TS/JS files using a Pi-native language-service integration.",
@@ -3081,6 +3155,22 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "pantheon_lsp_hover",
+    label: "Pantheon LSP Hover",
+    description: "Read hover/signature information for TS/JS symbols.",
+    promptSnippet: "Inspect symbol signature and inline documentation before editing or renaming code.",
+    parameters: LspPositionParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const result = hoverSymbol(ctx.cwd, params);
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
     name: "pantheon_lsp_find_references",
     label: "Pantheon LSP References",
     description: "Find symbol references for TS/JS files using a Pi-native language-service integration.",
@@ -3089,6 +3179,54 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const result = findReferences(ctx.cwd, params);
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_lsp_find_implementations",
+    label: "Pantheon LSP Implementations",
+    description: "Find implementation sites for TS/JS interfaces, abstract members, and contracts.",
+    promptSnippet: "Locate concrete implementations when tracing behavior from an interface or abstract definition.",
+    parameters: LspPositionParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const result = findImplementations(ctx.cwd, params);
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_lsp_type_definition",
+    label: "Pantheon LSP Type Definition",
+    description: "Locate TS/JS type definitions for the symbol under the cursor.",
+    promptSnippet: "Jump to the underlying type definition when inspecting inferred or aliased types.",
+    parameters: LspPositionParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const result = getTypeDefinitions(ctx.cwd, params);
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_lsp_symbols",
+    label: "Pantheon LSP Symbols",
+    description: "List document or workspace symbols for TS/JS projects.",
+    promptSnippet: "Inspect high-level symbol structure in a file or search for symbols across the current TS/JS project.",
+    parameters: LspSymbolsParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const result = listSymbols(ctx.cwd, params);
         return { content: [{ type: "text", text: result.text }], details: result };
       } catch (error) {
         return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
@@ -3121,6 +3259,22 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const result = renameSymbol(ctx.cwd, params);
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_apply_patch",
+    label: "Pantheon Apply Patch",
+    description: "Preview or apply unified diff patches with tolerant hunk matching.",
+    promptSnippet: "Use resilient patch application for larger refactors or when exact edit hunks are likely to drift.",
+    parameters: ApplyPatchParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const result = applyUnifiedPatch(ctx.cwd, params);
         return { content: [{ type: "text", text: result.text }], details: result };
       } catch (error) {
         return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
@@ -3163,7 +3317,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "pantheon_repo_map",
     label: "Pantheon Repo Map",
-    description: "Build a repository map / codemap summary for reconnaissance and planning.",
+    description: "Build a repository map summary for reconnaissance and planning.",
     promptSnippet: "Survey project structure, key files, directory hotspots, and entry points before planning large changes.",
     parameters: RepoMapParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -3185,6 +3339,54 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "pantheon_code_map",
+    label: "Pantheon Code Map",
+    description: "Build a semantic code map with entrypoints, import edges, and key symbols.",
+    promptSnippet: "Use semantic cartography when architecture, boundaries, imports, or important symbols matter more than the raw file tree.",
+    parameters: CodeMapParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const config = loadPantheonConfig(ctx.cwd).config;
+        const result = buildCodeMap(ctx.cwd, {
+          path: params.path,
+          maxFiles: params.maxFiles ?? config.skills?.cartography?.maxFiles,
+          maxSymbols: params.maxSymbols,
+          maxEdges: params.maxEdges,
+        });
+        return { content: [{ type: "text", text: result.text }], details: result };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_stats",
+    label: "Pantheon Stats",
+    description: "Report persisted Pantheon usage, latency, and failure statistics.",
+    promptSnippet: "Inspect recent Pantheon reliability and usage diagnostics before changing workflows or defaults.",
+    parameters: StatsParams,
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const stats = readPantheonStats(ctx.cwd, config);
+      return { content: [{ type: "text", text: renderPantheonStats(stats) }], details: stats };
+    },
+  });
+
+  pi.registerTool({
+    name: "pantheon_runtime_info",
+    label: "Pantheon Runtime Info",
+    description: "Report current Pantheon runtime hooks, active behaviors, and known parity limits inside pi.",
+    promptSnippet: "Inspect the current runtime/hook surface before assuming OpenCode-specific semantics are available.",
+    parameters: RuntimeInfoParams,
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const text = buildRuntimeParityReport(ctx, config);
+      return { content: [{ type: "text", text }], details: { hooks: ["session_start", "session_shutdown", "input", "turn_start", "before_agent_start", "tool_call", "tool_result", "agent_end"] } };
+    },
+  });
+
+  pi.registerTool({
     name: "pantheon_adapter_list",
     label: "Pantheon Adapter List",
     description: "List registered research adapters and effective permissions for the current agent/session.",
@@ -3192,16 +3394,16 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const config = loadPantheonConfig(ctx.cwd).config;
-      const { agentName, adapters } = getAllowedAdapters(config);
-      const registered = getEffectiveAdapters(config);
+      const { agentName, adapters, registered, loadErrors } = await getAllowedAdapters(ctx.cwd, config);
       const text = [
         `Current agent: ${agentName ?? "interactive"}`,
         `Allowed adapters: ${adapters.map((adapter) => adapter.id).join(", ") || "(none)"}`,
         "",
         "Registered adapters:",
         ...registered.map((adapter) => `- ${adapter.id}: ${adapter.description}`),
+        ...(loadErrors.length > 0 ? ["", "Load errors:", ...loadErrors.map((item) => `- ${item}`)] : []),
       ].join("\n");
-      return { content: [{ type: "text", text }], details: { agentName, allowed: adapters.map((adapter) => adapter.id), registered: registered.map((adapter) => adapter.id) } };
+      return { content: [{ type: "text", text }], details: { agentName, allowed: adapters.map((adapter) => adapter.id), registered: registered.map((adapter) => adapter.id), loadErrors } };
     },
   });
 
@@ -3212,21 +3414,24 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Use the adapter layer when you need a structured docs/code/release source instead of an unscoped web fetch.",
     parameters: AdapterSearchParams,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        const config = loadPantheonConfig(ctx.cwd).config;
-        const adapterIds = selectAdapterIds(config, params.adapter, params);
-        const sections: string[] = [];
-        const details: Array<{ adapter: string; details?: unknown }> = [];
-        for (const adapterId of adapterIds) {
-          const adapter = requireAdapter(config, adapterId);
+      const config = loadPantheonConfig(ctx.cwd).config;
+      const adapterIds = selectAdapterIds(config, params.adapter, params);
+      const sections: string[] = [];
+      const details: Array<{ adapter: string; details?: unknown; error?: string }> = [];
+      for (const adapterId of adapterIds) {
+        try {
+          const adapter = await requireAdapter(ctx.cwd, config, adapterId);
           const result = await adapter.search(params, config, signal);
           sections.push(`## ${adapter.id}\n${result.text}`);
           details.push({ adapter: adapter.id, details: result.details });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          sections.push(`## ${adapterId}\nAdapter error: ${message}`);
+          details.push({ adapter: adapterId, error: message });
         }
-        return { content: [{ type: "text", text: sections.join("\n\n") }], details: { adapters: details } };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
       }
+      const successful = details.filter((item) => !item.error).length;
+      return { content: [{ type: "text", text: sections.join("\n\n") || "No adapter results." }], details: { adapters: details }, isError: successful === 0 };
     },
   });
 
@@ -3239,7 +3444,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       try {
         const config = loadPantheonConfig(ctx.cwd).config;
-        const adapter = requireAdapter(config, params.adapter);
+        const adapter = await requireAdapter(ctx.cwd, config, params.adapter);
         const result = await adapter.fetch(params, config, signal);
         return { content: [{ type: "text", text: result.text }], details: { adapter: adapter.id, details: result.details } };
       } catch (error) {

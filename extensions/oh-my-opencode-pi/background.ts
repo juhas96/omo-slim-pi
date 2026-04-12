@@ -100,10 +100,19 @@ function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function maybeApplyTmuxLayout(layout?: NonNullable<PantheonConfig["multiplexer"]>["layout"]): void {
+function tmuxCapture(args: string[]): string | undefined {
+  if (!process.env.TMUX) return undefined;
+  try {
+    return execFileSync("tmux", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function maybeApplyTmuxLayout(layout?: NonNullable<PantheonConfig["multiplexer"]>["layout"], targetWindow?: string): void {
   if (!layout || !process.env.TMUX) return;
   try {
-    execFileSync("tmux", ["select-layout", layout], { stdio: ["ignore", "ignore", "ignore"] });
+    execFileSync("tmux", targetWindow ? ["select-layout", "-t", targetWindow, layout] : ["select-layout", layout], { stdio: ["ignore", "ignore", "ignore"] });
   } catch {
     // ignore missing support
   }
@@ -127,19 +136,62 @@ function maybeSetTmuxPaneTitle(paneId: string | undefined, title: string): void 
   }
 }
 
+function isTmuxPaneAlive(paneId?: string): boolean {
+  if (!paneId || !process.env.TMUX) return false;
+  return Boolean(tmuxCapture(["display-message", "-p", "-t", paneId, "#{pane_id}"]));
+}
+
+function resolveTmuxWindowName(multiplexer: PantheonConfig["multiplexer"] | undefined): string {
+  return multiplexer?.windowName?.trim() || "pantheon-bg";
+}
+
+function ensureTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined): { paneId?: string; windowTarget?: string } {
+  if (!process.env.TMUX || !multiplexer?.tmux) return {};
+  const windowName = resolveTmuxWindowName(multiplexer);
+  if (multiplexer.reuseWindow === false) return {};
+  const existingWindow = tmuxCapture(["list-windows", "-F", "#{window_id}:#{window_name}"])
+    ?.split(/\r?\n/)
+    .find((line) => line.endsWith(`:${windowName}`));
+  if (existingWindow) {
+    const windowId = existingWindow.split(":")[0];
+    const firstPaneId = tmuxCapture(["list-panes", "-t", windowId, "-F", "#{pane_id}"])
+      ?.split(/\r?\n/)
+      .find(Boolean);
+    return { paneId: firstPaneId || undefined, windowTarget: windowId };
+  }
+  const paneId = tmuxCapture(["new-window", "-d", "-P", "-F", "#{pane_id}", "-n", windowName, "sh", "-lc", "printf 'Pantheon background window ready\\n'; exec sh"]);
+  const windowTarget = paneId ? tmuxCapture(["display-message", "-p", "-t", paneId, "#{window_id}"]) : undefined;
+  return { paneId: paneId || undefined, windowTarget: windowTarget || undefined };
+}
+
+function focusTmuxWindow(multiplexer: PantheonConfig["multiplexer"] | undefined): void {
+  if (!process.env.TMUX || !multiplexer?.tmux || !multiplexer.focusOnSpawn) return;
+  const windowName = resolveTmuxWindowName(multiplexer);
+  try {
+    execFileSync("tmux", ["select-window", "-t", windowName], { stdio: ["ignore", "ignore", "ignore"] });
+  } catch {
+    // ignore
+  }
+}
+
 function maybeOpenTmuxPane(logPath: string, title: string, multiplexer: PantheonConfig["multiplexer"] | undefined): string | undefined {
   if (!process.env.TMUX || !multiplexer?.tmux) return undefined;
   try {
     const flag = multiplexer.splitDirection === "horizontal" ? "-h" : "-v";
     const command = `tail -f ${shellEscape(logPath)}`;
-    const paneId = execFileSync("tmux", ["split-window", flag, "-d", "-P", "-F", "#{pane_id}", command], {
+    const window = ensureTmuxWindow(multiplexer);
+    const splitArgs = ["split-window", flag, "-d", "-P", "-F", "#{pane_id}"];
+    if (window.windowTarget) splitArgs.push("-t", window.windowTarget);
+    splitArgs.push(command);
+    const paneId = execFileSync("tmux", splitArgs, {
       shell: true,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     maybeSetTmuxPaneTitle(paneId || undefined, title);
-    maybeApplyTmuxLayout(multiplexer.layout);
+    maybeApplyTmuxLayout(multiplexer.layout, window.windowTarget);
     maybeFocusTmuxPane(paneId || undefined, multiplexer.focusOnSpawn);
+    focusTmuxWindow(multiplexer);
     return paneId || undefined;
   } catch {
     return undefined;
@@ -155,7 +207,16 @@ export function closeTmuxPane(paneId?: string): void {
   }
 }
 
+export function attachAllBackgroundTaskPanes(tasks: BackgroundTaskRecord[], multiplexer: PantheonConfig["multiplexer"] | undefined): BackgroundTaskRecord[] {
+  return tasks.map((task) => (task.status === "queued" || task.status === "running") ? attachBackgroundTaskPane(task, multiplexer) : task);
+}
+
 export function attachBackgroundTaskPane(task: BackgroundTaskRecord, multiplexer: PantheonConfig["multiplexer"] | undefined): BackgroundTaskRecord {
+  if (isTmuxPaneAlive(task.paneId)) {
+    maybeFocusTmuxPane(task.paneId, true);
+    focusTmuxWindow(multiplexer);
+    return task;
+  }
   const paneId = maybeOpenTmuxPane(task.logPath, `${task.agent}: ${task.summary ?? task.task}`, multiplexer);
   if (!paneId) return task;
   const updated = { ...task, paneId };
@@ -180,7 +241,7 @@ export function startBackgroundTaskProcess(ctxCwd: string, task: BackgroundTaskR
     startedAt: Date.now(),
   };
   proc.unref();
-  if (!updated.paneId) {
+  if (!isTmuxPaneAlive(updated.paneId)) {
     updated.paneId = maybeOpenTmuxPane(updated.logPath, `${updated.agent}: ${updated.task}`, multiplexer);
   }
   writeBackgroundTask(updated);

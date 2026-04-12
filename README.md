@@ -15,7 +15,7 @@ This pi package ports the core ideas that make oh-my-opencode-slim useful:
 - **model fallback chains** for specialists and council master
 - **richer tmux integration** for background task logs and pane attach/reopen
 - **external research tools** for the Librarian (`pantheon_fetch`, `pantheon_search`, `pantheon_github_file`, `pantheon_github_releases`, `pantheon_npm_info`, `pantheon_package_docs`)
-- **repo cartography / codemap support** via `pantheon_repo_map`
+- **repo cartography / codemap support** via `pantheon_repo_map` and `pantheon_code_map`
 - **structured research adapters** via `pantheon_adapter_list`, `pantheon_adapter_search`, and `pantheon_adapter_fetch`
 - **agent-mode UX helpers** like `/pantheon-as`
 - **polished TUI command-center UI** for `/pantheon` and interactive selectors
@@ -181,7 +181,8 @@ Example:
 
   "adapters": {
     "disabled": ["github-releases"],
-    "defaultAllow": ["docs-context7", "web-search"]
+    "defaultAllow": ["docs-context7", "web-search"],
+    "modules": ["./pantheon-adapters/internal-docs.mjs"]
   },
 
   "council": {
@@ -284,6 +285,8 @@ Additional config sections now supported:
 - `multiplexer.layout`
 - `multiplexer.focusOnSpawn`
 - `multiplexer.keepPaneOnFinish`
+- `multiplexer.reuseWindow`
+- `multiplexer.windowName`
 - `research.timeoutMs`
 - `research.userAgent`
 - `research.maxResults`
@@ -301,6 +304,7 @@ Additional config sections now supported:
 - `adapters.disabled`
 - `adapters.defaultAllow`
 - `adapters.defaultDeny`
+- `adapters.modules`
 - `delegation.maxDepth`
 - `autoContinue.enabled`
 - `autoContinue.cooldownMs`
@@ -351,13 +355,17 @@ You can override any of them in your config.
 - `/pantheon-council` — interactive council launcher
 - `/pantheon-config` — show config source paths, presets, and validation warnings
 - `/pantheon-skills` — show effective skill/cartography guidance plus a starter config snippet
-- `/pantheon-repo-map` — render a repo map/codemap summary for the current workspace
+- `/pantheon-repo-map` — render a filesystem repo map summary for the current workspace
+- `/pantheon-code-map` — render a semantic code map with entrypoints, imports, and symbols
 - `/pantheon-adapters` — list registered research adapters and effective session policy
 - `/pantheon-as <agent> <task>` — direct-route the next task to a specialist
 - `/pantheon-auto-continue [on|off]` — toggle auto-continue
 - `/pantheon-spec` — interactive interview that loads a markdown spec into the editor
+- `/pantheon-spec-studio` — open an editor-first spec template for feature/refactor/investigation/incident work
+- `/pantheon-bootstrap` — scaffold project-local Pantheon config and starter directories
 - `/pantheon-backgrounds` — list recent background tasks
 - `/pantheon-attach [taskId]` — open/reopen a tmux pane for a background task log
+- `/pantheon-attach-all` — open/reuse panes for all queued/running background tasks
 - `/pantheon-cancel [taskId]` — cancel a running background task
 - `/pantheon-log [taskId]` — load the tail of a background task log into the editor
 - `/pantheon-result [taskId]` — load the final result summary of a background task into the editor
@@ -367,6 +375,8 @@ You can override any of them in your config.
 - `/pantheon-overview` — combined workflow + background overview
 - `/pantheon-resume` — generate a resume brief from persisted todos and recent background work
 - `/pantheon-cleanup` — remove old completed task artifacts
+- `/pantheon-runtime` — inspect active hook/runtime behavior and known parity limits inside pi
+- `/pantheon-stats` — inspect Pantheon usage, reliability, and adapter/background statistics
 - `/pantheon-debug-dir` — show the foreground debug trace directory
 - `/pantheon-debugs` — list recent foreground debug traces
 - `/pantheon-debug [traceId]` — load a recent foreground debug trace into the editor
@@ -387,7 +397,10 @@ New tools:
 - `pantheon_resume_context`
 - `pantheon_auto_continue`
 - `pantheon_interview_spec`
+- `pantheon_spec_template`
+- `pantheon_bootstrap`
 - `pantheon_repo_map`
+- `pantheon_code_map`
 
 Use these when work should continue detached from the current flow.
 
@@ -398,7 +411,8 @@ Stabilization features now included:
 - cancellation with PID signaling
 - retry from saved task specs
 - tmux pane attach/reopen via command/tool
-- configurable tmux layout, focus, and keep-pane behavior
+- shared tmux window orchestration with pane reuse/reattach
+- configurable tmux layout, focus, keep-pane, reuse-window, and window-name behavior
 - log tail inspection
 - cleanup of old finished task artifacts
 
@@ -473,11 +487,44 @@ This makes it possible to inspect failures like `Subagent was aborted` and see w
 
 ## Interview/spec workflow
 
-You can generate a structured markdown specification in two ways:
+You can generate a structured markdown specification in several ways:
 - command: `/pantheon-spec`
+- command: `/pantheon-spec-studio`
 - tool: `pantheon_interview_spec`
+- tool: `pantheon_spec_template`
 
-The command asks interactive questions and loads the generated markdown into the editor.
+`/pantheon-spec` remains the guided interview flow.
+
+`/pantheon-spec-studio` is the richer editor-first path: choose a template kind (`feature`, `refactor`, `investigation`, `incident`) and Pantheon loads a structured outline into the editor for iterative drafting.
+
+## Bootstrap / onboarding
+
+For first-run setup in a repository, use:
+- command: `/pantheon-bootstrap`
+- tool: `pantheon_bootstrap`
+
+This scaffolds:
+- `.pi/oh-my-opencode-pi.jsonc`
+- `.pi/pantheon-adapters/`
+- `.pi/agents/`
+- `.pi/prompts/`
+
+## LSP and structural tools
+
+Pi-native code intelligence tools now include:
+- `pantheon_lsp_goto_definition`
+- `pantheon_lsp_hover`
+- `pantheon_lsp_find_references`
+- `pantheon_lsp_find_implementations`
+- `pantheon_lsp_type_definition`
+- `pantheon_lsp_symbols`
+- `pantheon_lsp_diagnostics`
+- `pantheon_lsp_rename`
+- `pantheon_apply_patch`
+- `pantheon_ast_grep_search`
+- `pantheon_ast_grep_replace`
+
+Current LSP support is TypeScript/JavaScript-focused via the TypeScript language service, but it now covers more than the original basic definition/reference/diagnostic/rename set. For larger refactors, `pantheon_apply_patch` adds a more apply_patch-like path that can tolerate moved hunks and whitespace drift better than a strict exact-match edit.
 
 ## External research tools
 
@@ -491,28 +538,36 @@ New tools:
 - `pantheon_npm_info` — inspect npm registry metadata and versions
 - `pantheon_package_docs` — fetch package metadata plus README/docs excerpt
 - `pantheon_adapter_list` — list the structured adapter registry and effective permissions
-- `pantheon_adapter_search` — search through structured adapters such as `docs-context7`, `grep-app`, `web-search`, and `github-releases`
+- `pantheon_adapter_search` — search through structured adapters such as `local-docs`, `docs-context7`, `grep-app`, `github-code-search`, `web-search`, and `github-releases`
 - `pantheon_adapter_fetch` — fetch through a specific adapter with policy enforcement
+- `pantheon_runtime_info` — inspect active runtime hooks and known parity limits
+- `pantheon_stats` — inspect persisted Pantheon usage and reliability statistics
 
 The bundled `librarian` agent now has access to these tools.
 
 ## Repo cartography / skills
 
 The package now includes a Pi-native repository cartography layer:
-- `pantheon_repo_map` for quick repo/codemap summaries
+- `pantheon_repo_map` for quick filesystem-level repo summaries
+- `pantheon_code_map` for semantic entrypoint/import/symbol mapping
 - per-agent `allowSkills` / `denySkills` policy fields
 - `skills.cartography.*` config for scan limits and excludes
 - `/pantheon-skills` for a starter config/setup flow
 
-When cartography is enabled, bundled agents get a prompt hint to use `pantheon_repo_map` during reconnaissance-heavy work.
+When cartography is enabled, bundled agents get a prompt hint to use `pantheon_repo_map` and `pantheon_code_map` during reconnaissance-heavy work.
 
 ## Adapter system
 
 The package also includes a lightweight MCP-like adapter registry for structured research:
+- `local-docs` — local README/docs markdown search inside the current repository
 - `docs-context7` — docs/package/site-aware resolution and fetch
 - `grep-app` — public code search against grep.app-style results
+- `github-code-search` — structured GitHub code search within a target repo
 - `web-search` — generic fallback search/fetch
 - `github-releases` — structured release/changelog retrieval
+- custom adapter modules loaded from `adapters.modules`, `~/.pi/agent/pantheon-adapters/`, and project-local `.pi/pantheon-adapters/`
+
+Custom adapter modules can export a default object with `id`, `label`, `description`, and `search`/`fetch` functions. Those handlers receive the current config plus helper utilities for docs resolution, web search, fetches, GitHub files/releases, npm/package docs, and HTML-to-text conversion.
 
 Policy controls:
 - global: `adapters.disableAll`, `adapters.disabled`, `adapters.defaultAllow`, `adapters.defaultDeny`
@@ -562,6 +617,18 @@ What it does not do:
 - it does **not** rewrite ambiguous matches
 - it does **not** rescue `write`
 - it does **not** do full patch/hunk recovery like the original OpenCode `apply_patch` interception
+
+## Observability
+
+Pantheon now persists lightweight usage diagnostics to `.oh-my-opencode-pi-stats.json`, including delegate/council success-failure counts, per-agent totals, adapter usage/failures, background outcomes, and recent activity.
+
+Use:
+- `/pantheon-stats`
+- `pantheon_stats`
+
+## Runtime parity notes
+
+A living runtime comparison now lives in `docs/runtime-parity.md`, and you can inspect the active in-session view with `/pantheon-runtime` or `pantheon_runtime_info`.
 
 ## Notes
 

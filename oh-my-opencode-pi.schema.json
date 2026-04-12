@@ -145,7 +145,9 @@
           "default": "main-vertical"
         },
         "focusOnSpawn": { "type": "boolean", "default": false },
-        "keepPaneOnFinish": { "type": "boolean", "default": false }
+        "keepPaneOnFinish": { "type": "boolean", "default": false },
+        "reuseWindow": { "type": "boolean", "default": true },
+        "windowName": { "type": "string", "default": "pantheon-bg" }
       }
     },
     "research": {
@@ -186,7 +188,8 @@
         "disableAll": { "type": "boolean", "default": false },
         "disabled": { "type": "array", "items": { "type": "string" }, "default": [] },
         "defaultAllow": { "type": "array", "items": { "type": "string" }, "default": [] },
-        "defaultDeny": { "type": "array", "items": { "type": "string" }, "default": [] }
+        "defaultDeny": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "modules": { "type": "array", "items": { "type": "string" }, "default": [] }
       }
     },
     "delegation": {

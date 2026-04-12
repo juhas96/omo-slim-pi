@@ -21,6 +21,12 @@ export const LspDiagnosticsParams = Type.Object({
   maxResults: Type.Optional(Type.Number({ description: "Maximum diagnostics to return.", default: 100 })),
 });
 
+export const LspSymbolsParams = Type.Object({
+  path: Type.Optional(Type.String({ description: "Optional file path. Omit to use the nearest configured project entry file." })),
+  query: Type.Optional(Type.String({ description: "Optional symbol query. When provided, runs a workspace-style symbol search." })),
+  maxResults: Type.Optional(Type.Number({ description: "Maximum symbols to return.", default: 100 })),
+});
+
 export const LspRenameParams = Type.Object({
   path: Type.String({ description: "Project-relative or absolute file path." }),
   line: Type.Number({ description: "1-indexed line number." }),
@@ -50,6 +56,16 @@ export interface LspDiagnostic {
 export interface LspRenameFileEdit {
   path: string;
   edits: number;
+}
+
+export interface LspSymbol {
+  name: string;
+  kind: string;
+  path: string;
+  line: number;
+  character: number;
+  preview: string;
+  containerName?: string;
 }
 
 interface ProjectContext {
@@ -221,6 +237,31 @@ function diagnosticCategoryName(category: ts.DiagnosticCategory): string {
   }
 }
 
+function displayPartsToText(parts: readonly ts.SymbolDisplayPart[] | undefined): string {
+  return ts.displayPartsToString(parts ? [...parts] : []);
+}
+
+function symbolKindName(kind: string | undefined): string {
+  return (kind ?? "symbol").replace(/Element$/, "");
+}
+
+export function hoverSymbol(cwd: string, params: { path: string; line: number; character: number }): { text: string; display?: string; documentation?: string } {
+  const context = createProjectContext(cwd, params.path);
+  try {
+    const text = fs.readFileSync(context.filePath, "utf8");
+    const position = toOffset(text, params.line, params.character);
+    const quickInfo = context.service.getQuickInfoAtPosition(context.filePath, position);
+    if (!quickInfo) return { text: "No hover information found." };
+    const display = displayPartsToText(quickInfo.displayParts);
+    const documentation = displayPartsToText(quickInfo.documentation);
+    const tags = (quickInfo.tags ?? []).map((tag) => `@${tag.name} ${displayPartsToText(tag.text)}`.trim()).filter(Boolean);
+    const sections = [display || "(no signature)", documentation ? `\n${documentation}` : undefined, tags.length > 0 ? `\n${tags.join("\n")}` : undefined].filter((value): value is string => Boolean(value));
+    return { text: sections.join("\n"), display, documentation };
+  } finally {
+    context.dispose();
+  }
+}
+
 export function gotoDefinition(cwd: string, params: { path: string; line: number; character: number }): { text: string; locations: LspLocation[] } {
   const context = createProjectContext(cwd, params.path);
   try {
@@ -251,6 +292,93 @@ export function findReferences(cwd: string, params: { path: string; line: number
       ? locations.map((location, index) => `${index + 1}. ${location.path}:${location.line}:${location.character}\n   ${location.preview}`).join("\n")
       : "No references found.";
     return { text: body, locations };
+  } finally {
+    context.dispose();
+  }
+}
+
+export function findImplementations(cwd: string, params: { path: string; line: number; character: number }): { text: string; locations: LspLocation[] } {
+  const context = createProjectContext(cwd, params.path);
+  try {
+    const text = fs.readFileSync(context.filePath, "utf8");
+    const position = toOffset(text, params.line, params.character);
+    const implementations = context.service.getImplementationAtPosition(context.filePath, position) ?? [];
+    const locations = implementations.map((item) => locationFromTextSpan(item.fileName, item.textSpan, item.kind));
+    const body = locations.length > 0
+      ? locations.map((location, index) => `${index + 1}. ${location.path}:${location.line}:${location.character}${location.kind ? ` [${location.kind}]` : ""}\n   ${location.preview}`).join("\n")
+      : "No implementations found.";
+    return { text: body, locations };
+  } finally {
+    context.dispose();
+  }
+}
+
+export function getTypeDefinitions(cwd: string, params: { path: string; line: number; character: number }): { text: string; locations: LspLocation[] } {
+  const context = createProjectContext(cwd, params.path);
+  try {
+    const text = fs.readFileSync(context.filePath, "utf8");
+    const position = toOffset(text, params.line, params.character);
+    const definitions = context.service.getTypeDefinitionAtPosition(context.filePath, position) ?? [];
+    const locations = definitions.map((item) => locationFromTextSpan(item.fileName, item.textSpan, item.kind, item.name));
+    const body = locations.length > 0
+      ? locations.map((location, index) => `${index + 1}. ${location.path}:${location.line}:${location.character}${location.kind ? ` [${location.kind}]` : ""}\n   ${location.preview}`).join("\n")
+      : "No type definitions found.";
+    return { text: body, locations };
+  } finally {
+    context.dispose();
+  }
+}
+
+function flattenNavigationTree(filePath: string, sourceText: string, items: readonly ts.NavigationTree[], symbols: LspSymbol[], maxResults: number, containerName?: string): void {
+  for (const item of items) {
+    if (symbols.length >= maxResults) return;
+    const span = item.spans?.[0];
+    if (span) {
+      const info = getLineInfo(sourceText, span.start);
+      symbols.push({
+        name: item.text,
+        kind: symbolKindName(item.kind),
+        path: filePath,
+        line: info.line,
+        character: info.character,
+        preview: info.preview,
+        containerName,
+      });
+    }
+    if (item.childItems?.length) flattenNavigationTree(filePath, sourceText, item.childItems, symbols, maxResults, item.text);
+  }
+}
+
+export function listSymbols(cwd: string, params: { path?: string; query?: string; maxResults?: number }): { text: string; symbols: LspSymbol[]; projectPath?: string } {
+  const context = createProjectContext(cwd, params.path);
+  try {
+    const maxResults = Math.max(1, Math.floor(params.maxResults ?? 100));
+    let symbols: LspSymbol[] = [];
+    if (params.query?.trim()) {
+      symbols = (context.service.getNavigateToItems(params.query.trim(), undefined, undefined, false) ?? [])
+        .slice(0, maxResults)
+        .map((item) => {
+          const text = fs.readFileSync(item.fileName, "utf8");
+          const info = getLineInfo(text, item.textSpan.start);
+          return {
+            name: item.name,
+            kind: symbolKindName(item.kind),
+            path: item.fileName,
+            line: info.line,
+            character: info.character,
+            preview: info.preview,
+            containerName: item.containerName || undefined,
+          };
+        });
+    } else {
+      const sourceText = fs.readFileSync(context.filePath, "utf8");
+      const tree = context.service.getNavigationTree(context.filePath);
+      flattenNavigationTree(context.filePath, sourceText, tree.childItems ?? [], symbols, maxResults);
+    }
+    const text = symbols.length > 0
+      ? symbols.map((symbol, index) => `${index + 1}. ${symbol.path}:${symbol.line}:${symbol.character} [${symbol.kind}] ${symbol.name}${symbol.containerName ? ` (${symbol.containerName})` : ""}\n   ${symbol.preview}`).join("\n")
+      : "No symbols found.";
+    return { text, symbols, projectPath: context.configPath };
   } finally {
     context.dispose();
   }

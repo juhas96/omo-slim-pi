@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Type } from "@sinclair/typebox";
@@ -105,18 +106,26 @@ function buildCommonArgs(
   return { args, targetPath, language };
 }
 
-function parseMatches(output: string, maxResults: number): AstGrepMatch[] {
+interface RawAstGrepMatch {
+  file: string;
+  text: string;
+  lines: string;
+  language?: string;
+  replacement?: string;
+  range: { start: { line: number; column: number } };
+  replacementOffsets?: { start: number; end: number };
+}
+
+function parseRawMatches(output: string): RawAstGrepMatch[] {
   return output
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as {
-      file: string;
-      text: string;
-      lines: string;
-      language?: string;
-      range: { start: { line: number; column: number } };
-    })
+    .map((line) => JSON.parse(line) as RawAstGrepMatch);
+}
+
+function parseMatches(output: string, maxResults: number): AstGrepMatch[] {
+  return parseRawMatches(output)
     .slice(0, maxResults)
     .map((item) => ({
       path: item.file,
@@ -178,13 +187,40 @@ export function astGrepReplace(
   const maxResults = Math.max(1, Math.floor(params.maxResults ?? 50));
   const { args, targetPath, language } = buildCommonArgs(cwd, params);
   args.push("--rewrite", params.rewrite);
-  if (params.apply) args.push("--update-all");
   const output = execFileSync(getAstGrepExecutable(), args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const matches = parseMatches(output, maxResults);
+  const rawMatches = parseRawMatches(output);
+  const matches = rawMatches.slice(0, maxResults).map((item) => ({
+    path: item.file,
+    line: item.range.start.line + 1,
+    column: item.range.start.column + 1,
+    text: item.text,
+    context: item.lines,
+    language: item.language,
+  }));
+
+  if (params.apply) {
+    const grouped = new Map<string, RawAstGrepMatch[]>();
+    for (const match of rawMatches) {
+      const existing = grouped.get(match.file) ?? [];
+      existing.push(match);
+      grouped.set(match.file, existing);
+    }
+    for (const [filePath, entries] of grouped.entries()) {
+      let text = fs.readFileSync(filePath, "utf8");
+      const ordered = entries
+        .filter((entry) => typeof entry.replacement === "string" && entry.replacementOffsets)
+        .sort((a, b) => (b.replacementOffsets!.start - a.replacementOffsets!.start));
+      for (const entry of ordered) {
+        text = `${text.slice(0, entry.replacementOffsets!.start)}${entry.replacement ?? ""}${text.slice(entry.replacementOffsets!.end)}`;
+      }
+      fs.writeFileSync(filePath, text);
+    }
+  }
+
   const action = params.apply ? "Applied" : "Prepared";
   const body = matches.length > 0
     ? `${action} structural rewrite for ${matches.length} match${matches.length === 1 ? "" : "es"}.\n\n${formatMatches(matches)}`

@@ -19,6 +19,9 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
   fs.writeFileSync(globalPrompt, "Global fixer guidance\n");
   fs.writeFileSync(projectPrompt, "Project explorer guidance\n");
 
+  const customAdapterModule = path.join(agentDir, "mock-adapter.mjs");
+  fs.writeFileSync(customAdapterModule, "export default { id: 'mock-adapter', label: 'Mock Adapter', description: 'test adapter', async fetch() { return 'ok'; } };\n");
+
   fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.jsonc"), `{
     // JSONC support
     "preset": "fast",
@@ -28,7 +31,8 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     },
     "adapters": {
       "defaultAllow": ["docs-context7"],
-      "disabled": ["github-releases"]
+      "disabled": ["github-releases"],
+      "modules": ["./mock-adapter.mjs"]
     },
     "agents": {
       "fixer": {
@@ -73,6 +77,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.equal(result.config.skills?.cartography?.maxFiles, 120);
     assert.deepEqual(result.config.adapters?.defaultAllow, ["docs-context7"]);
     assert.deepEqual(result.config.adapters?.disabled, ["github-releases"]);
+    assert.deepEqual(result.config.adapters?.modules, [customAdapterModule]);
     assert.equal(result.warnings.length, 0);
   } finally {
     if (previous === undefined) delete process.env[AGENT_DIR_ENV];
