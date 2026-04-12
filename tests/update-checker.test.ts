@@ -7,6 +7,8 @@ import { checkForPackageUpdates, compareVersions } from "../extensions/oh-my-ope
 
 const realFetch = globalThis.fetch;
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+const CURRENT_PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version as string;
+const NEWER_PACKAGE_VERSION = CURRENT_PACKAGE_VERSION.replace(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/, (_, major: string, minor: string, patch: string) => `${major}.${minor}.${Number(patch) + 1}`);
 
 test.afterEach(() => {
   globalThis.fetch = realFetch;
@@ -39,8 +41,8 @@ test("forced update checks can refresh even in a local checkout", async () => {
   globalThis.fetch = (async () => {
     calls += 1;
     return new Response(JSON.stringify({
-      "dist-tags": { latest: "0.1.1" },
-      time: { "0.1.1": "2026-04-12T00:00:00.000Z" },
+      "dist-tags": { latest: NEWER_PACKAGE_VERSION },
+      time: { [NEWER_PACKAGE_VERSION]: "2026-04-12T00:00:00.000Z" },
     }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -62,8 +64,8 @@ test("update checker fetches latest version and reuses fresh cache", async () =>
   globalThis.fetch = (async () => {
     calls += 1;
     return new Response(JSON.stringify({
-      "dist-tags": { latest: "0.1.1" },
-      time: { "0.1.1": "2026-04-12T00:00:00.000Z" },
+      "dist-tags": { latest: NEWER_PACKAGE_VERSION },
+      time: { [NEWER_PACKAGE_VERSION]: "2026-04-12T00:00:00.000Z" },
     }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -85,7 +87,7 @@ test("update checker fetches latest version and reuses fresh cache", async () =>
 
   const first = await checkForPackageUpdates(config);
   assert.equal(first.status, "update-available");
-  assert.equal(first.latestVersion, "0.1.1");
+  assert.equal(first.latestVersion, NEWER_PACKAGE_VERSION);
   assert.equal(first.usedCache, false);
   assert.equal(calls, 1);
   assert.ok(fs.existsSync(cachePath));
@@ -97,6 +99,6 @@ test("update checker fetches latest version and reuses fresh cache", async () =>
   const second = await checkForPackageUpdates(config);
   assert.equal(second.status, "update-available");
   assert.equal(second.usedCache, true);
-  assert.equal(second.latestVersion, "0.1.1");
+  assert.equal(second.latestVersion, NEWER_PACKAGE_VERSION);
   assert.equal(calls, 1);
 });
