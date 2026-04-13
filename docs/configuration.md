@@ -143,6 +143,7 @@ See [council.md](council.md) for usage guidance.
     "delegateTimeoutMs": 0,
     "retryDelayMs": 500,
     "retryOnEmpty": true,
+    "finalMessageGraceMs": 1500,
     "agentTimeouts": {
       "explorer": 120000,
       "librarian": 120000
@@ -166,6 +167,7 @@ See [council.md](council.md) for usage guidance.
 - `agents`
 - `council`
 - `fallback`
+- `fallback.finalMessageGraceMs`
 
 ### Background execution
 
@@ -219,6 +221,19 @@ See [council.md](council.md) for usage guidance.
 - `skills.cartography.maxDepth`
 - `skills.cartography.maxPerDirectory`
 - `skills.cartography.exclude`
+
+### Fallback / execution recovery
+
+- `fallback.timeoutMs`
+- `fallback.delegateTimeoutMs`
+- `fallback.retryDelayMs`
+- `fallback.retryOnEmpty`
+- `fallback.finalMessageGraceMs`
+- `fallback.agentTimeouts`
+- `fallback.agentChains`
+- `fallback.councilMaster`
+
+`fallback.finalMessageGraceMs` controls how long Pantheon waits after a clear final assistant response before terminating a lingering child process. Increase it if a provider needs more teardown time; decrease it if foreground handoff still feels sluggish.
 
 ### Delegation / workflow
 

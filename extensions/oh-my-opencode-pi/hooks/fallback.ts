@@ -27,6 +27,14 @@ export function resolveBackgroundAttemptTimeoutMs(config: PantheonConfig): numbe
   return 15000;
 }
 
+export function resolveFinalMessageGraceMs(config: PantheonConfig): number {
+  const graceMs = config.fallback?.finalMessageGraceMs;
+  if (typeof graceMs === "number" && Number.isFinite(graceMs) && graceMs >= 0) {
+    return Math.floor(graceMs);
+  }
+  return 1500;
+}
+
 export function getFallbackModels(config: PantheonConfig, agentName: string, primary?: string): string[] {
   const chain = config.fallback?.agentChains?.[agentName] ?? [];
   return [primary, ...chain].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);

@@ -49,6 +49,7 @@ export interface PantheonConfig {
     delegateTimeoutMs?: number;
     retryDelayMs?: number;
     retryOnEmpty?: boolean;
+    finalMessageGraceMs?: number;
     agentTimeouts?: Record<string, number>;
     agentChains?: Record<string, string[]>;
     councilMaster?: string[];
@@ -208,7 +209,7 @@ const AGENT_OVERRIDE_KEYS = new Set([
 const COUNCIL_KEYS = new Set(["defaultPreset", "presets", "masterTimeoutMs", "councillorsTimeoutMs"]);
 const COUNCIL_PRESET_KEYS = new Set(["master", "councillors"]);
 const COUNCIL_MEMBER_KEYS = new Set(["name", "model", "variant", "prompt", "options"]);
-const FALLBACK_KEYS = new Set(["timeoutMs", "delegateTimeoutMs", "retryDelayMs", "retryOnEmpty", "agentTimeouts", "agentChains", "councilMaster"]);
+const FALLBACK_KEYS = new Set(["timeoutMs", "delegateTimeoutMs", "retryDelayMs", "retryOnEmpty", "finalMessageGraceMs", "agentTimeouts", "agentChains", "councilMaster"]);
 const BACKGROUND_KEYS = new Set(["enabled", "pollIntervalMs", "logDir", "maxConcurrent", "reuseSessions", "heartbeatIntervalMs", "staleAfterMs"]);
 const MULTIPLEXER_KEYS = new Set(["tmux", "splitDirection", "layout", "focusOnSpawn", "keepPaneOnFinish", "reuseWindow", "windowName", "projectScopedWindow"]);
 const RESEARCH_KEYS = new Set(["timeoutMs", "userAgent", "maxResults", "githubToken", "defaultDocsSite"]);
@@ -743,6 +744,7 @@ function getDefaultConfig(): PantheonConfig {
       delegateTimeoutMs: 0,
       retryDelayMs: 500,
       retryOnEmpty: true,
+      finalMessageGraceMs: 1500,
       agentTimeouts: {},
       agentChains: {},
       councilMaster: [],
@@ -871,6 +873,9 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     }
     if (typeof input.fallback.retryOnEmpty === "boolean") {
       config.fallback!.retryOnEmpty = input.fallback.retryOnEmpty;
+    }
+    if (typeof input.fallback.finalMessageGraceMs === "number" && Number.isFinite(input.fallback.finalMessageGraceMs) && input.fallback.finalMessageGraceMs >= 0) {
+      config.fallback!.finalMessageGraceMs = Math.floor(input.fallback.finalMessageGraceMs);
     }
     if (isObject(input.fallback.agentTimeouts)) {
       config.fallback!.agentTimeouts = Object.fromEntries(

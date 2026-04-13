@@ -49,6 +49,7 @@ import {
   getFallbackModels,
   resolveCouncilAttemptTimeoutMs,
   resolveDelegateAttemptTimeoutMs,
+  resolveFinalMessageGraceMs,
 } from "./hooks/fallback.js";
 import { rescueEditSequence } from "./hooks/json-recovery.js";
 import {
@@ -183,7 +184,6 @@ const WORKFLOW_GUIDANCE_KEY = "oh-my-opencode-pi-workflow-guidance";
 const SUBAGENT_ACTIVITY_KEY = "oh-my-opencode-pi-subagent-activity";
 const COMMAND_PROGRESS_STATUS_KEY = "oh-my-opencode-pi-command-progress";
 const VERSION_STATUS_KEY = "oh-my-opencode-pi-version";
-const SUBAGENT_FINAL_MESSAGE_GRACE_MS = 1500;
 const SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES = 24 * 1024;
 const SUBAGENT_DETAIL_LOG_PREVIEW_BYTES = 48 * 1024;
 let latestSubagentActivity: SubagentActivityState | undefined;
@@ -568,6 +568,33 @@ function renderSubagentActivityLines(
   return lines;
 }
 
+function formatByteSize(bytes: number | undefined): string {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) return "unknown size";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round((bytes / 1024) * 10) / 10} KB`;
+  return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
+}
+
+function getDebugArtifactSize(filePath: string | undefined): number | undefined {
+  if (!filePath) return undefined;
+  try {
+    return fs.statSync(filePath).size;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildDebugArtifactDescription(
+  filePath: string | undefined,
+  options?: { maxBytes?: number; mode?: "head" | "tail"; missingDescription?: string },
+): string {
+  const size = getDebugArtifactSize(filePath);
+  if (size == null) return options?.missingDescription ?? "not available";
+  const maxBytes = Math.max(1024, Math.floor(options?.maxBytes ?? SUBAGENT_DETAIL_LOG_PREVIEW_BYTES));
+  if (size <= maxBytes) return `${path.basename(filePath!)} • ${formatByteSize(size)} • full preview`;
+  return `${path.basename(filePath!)} • ${formatByteSize(size)} • ${options?.mode === "tail" ? "tail" : "head"} preview capped at ${formatByteSize(maxBytes)}`;
+}
+
 function readDebugArtifactPreview(
   filePath: string | undefined,
   fallback: string,
@@ -594,6 +621,36 @@ function readDebugArtifactPreview(
   } catch {
     return fallback;
   }
+}
+
+function buildSubagentArtifactText(
+  entry: { label: string; result: SingleResult },
+  artifactLabel: string,
+  filePath: string | undefined,
+  fallback: string,
+  options?: { maxBytes?: number; mode?: "head" | "tail" },
+): string {
+  return [
+    `Subagent: ${entry.label}`,
+    `Artifact: ${artifactLabel}`,
+    filePath ? `Path: ${filePath}` : undefined,
+    `Preview: ${buildDebugArtifactDescription(filePath, options)}`,
+    "",
+    readDebugArtifactPreview(filePath, fallback, options),
+  ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
+function buildSubagentPathsText(entry: { label: string; result: SingleResult }): string {
+  const result = entry.result;
+  return [
+    `Subagent: ${entry.label}`,
+    `Agent: ${result.agent}`,
+    result.debugTraceId ? `Trace: ${result.debugTraceId}` : undefined,
+    result.debugDir ? `Debug dir: ${result.debugDir}` : undefined,
+    result.debugSummaryPath ? `Summary JSON: ${result.debugSummaryPath}` : undefined,
+    result.debugStdoutPath ? `Stdout: ${result.debugStdoutPath}` : undefined,
+    result.debugStderrPath ? `Stderr: ${result.debugStderrPath}` : undefined,
+  ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
 function buildSubagentDetailText(entry: { label: string; result: SingleResult }): string {
@@ -812,6 +869,7 @@ async function runSingleAgent(
   step: number | undefined,
   signal: AbortSignal | undefined,
   onUpdate: OnUpdateCallback | undefined,
+  finalMessageGraceMs: number,
   debug?: SubagentDebugContext,
 ): Promise<SingleResult> {
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
@@ -894,7 +952,7 @@ async function runSingleAgent(
       lingerTimer = setTimeout(() => {
         lingerTimer = undefined;
         if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
-      }, SUBAGENT_FINAL_MESSAGE_GRACE_MS);
+      }, finalMessageGraceMs);
     };
 
     const processLine = (line: string) => {
@@ -1023,6 +1081,7 @@ async function runSingleAgentWithFallback(
     : resolveDelegateAttemptTimeoutMs(config, agentName);
   const retryDelayMs = Math.max(0, Math.floor(config.fallback?.retryDelayMs ?? 500));
   const retryOnEmpty = config.fallback?.retryOnEmpty !== false;
+  const finalMessageGraceMs = resolveFinalMessageGraceMs(config);
   const models = explicitModels && explicitModels.length > 0
     ? explicitModels
     : getFallbackModels(config, agentName, agent.model);
@@ -1044,12 +1103,12 @@ async function runSingleAgentWithFallback(
     const debug = createSubagentDebugContext(
       debugTrace,
       `${debugLabel ?? agentName}${step ? `-step-${step}` : ""}-attempt-${attemptIndex + 1}${model ? `-${model}` : ""}`,
-      { agentName, model, step, cwd: cwd ?? ctxCwd, task, timeoutMs },
+      { agentName, model, step, cwd: cwd ?? ctxCwd, task, timeoutMs, finalMessageGraceMs },
     );
 
     try {
-      appendDebugEvent(debugTrace, "attempt_start", { agentName, model, step, attempt: attemptIndex + 1, label: debug?.label, timeoutMs });
-      const result = await runSingleAgent(ctxCwd, attemptAgent, task, cwd, step, controller.signal, onUpdate, debug);
+      appendDebugEvent(debugTrace, "attempt_start", { agentName, model, step, attempt: attemptIndex + 1, label: debug?.label, timeoutMs, finalMessageGraceMs });
+      const result = await runSingleAgent(ctxCwd, attemptAgent, task, cwd, step, controller.signal, onUpdate, finalMessageGraceMs, debug);
       lastResult = result;
       const emptyResponse = !hasMeaningfulResult(result);
       if (emptyResponse && retryOnEmpty && !result.errorMessage) {
@@ -3252,13 +3311,43 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     const nextItems = [
-      { value: "details", label: "Open details", description: "Open summary plus stdout/stderr for this subagent." },
+      { value: "details", label: "Open details", description: "Combined summary with capped previews for summary/stdout/stderr." },
+      { value: "summary", label: "Open summary JSON preview", description: buildDebugArtifactDescription(entry.result.debugSummaryPath, { maxBytes: SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES, missingDescription: "summary.json not available" }) },
+      { value: "stdout", label: "Open stdout tail", description: buildDebugArtifactDescription(entry.result.debugStdoutPath, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail", missingDescription: "stdout log not available" }) },
+      { value: "stderr", label: "Open stderr tail", description: entry.result.debugStderrPath
+        ? buildDebugArtifactDescription(entry.result.debugStderrPath, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail", missingDescription: "stderr log not available" })
+        : (entry.result.stderr ? `inline stderr • ${formatByteSize(Buffer.byteLength(entry.result.stderr, "utf8"))}` : "stderr log not available") },
+      { value: "paths", label: "Open artifact paths", description: "Show debug dir and summary/stdout/stderr file paths for manual inspection." },
       ...(entry.result.debugTraceId ? [{ value: "trace", label: "Open full trace", description: `Jump to trace ${entry.result.debugTraceId}.` }] : []),
     ];
     const action = await showPantheonSelect(ctx, `Subagent · ${entry.label}`, nextItems);
     if (!action) return;
     if (action === "trace" && entry.result.debugTraceId) {
       await handlePantheonDebugCommand(entry.result.debugTraceId, ctx);
+      return;
+    }
+    if (action === "summary") {
+      ctx.ui.setEditorText(buildSubagentArtifactText(entry, "Summary JSON", entry.result.debugSummaryPath, "(no summary file)", { maxBytes: SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES }));
+      ctx.ui.notify(`Loaded summary preview for ${entry.label}.`, "info");
+      return;
+    }
+    if (action === "stdout") {
+      ctx.ui.setEditorText(buildSubagentArtifactText(entry, "Stdout", entry.result.debugStdoutPath, "(no stdout log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }));
+      ctx.ui.notify(`Loaded stdout tail for ${entry.label}.`, "info");
+      return;
+    }
+    if (action === "stderr") {
+      if (entry.result.debugStderrPath) {
+        ctx.ui.setEditorText(buildSubagentArtifactText(entry, "Stderr", entry.result.debugStderrPath, entry.result.stderr || "(no stderr log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }));
+      } else {
+        ctx.ui.setEditorText([`Subagent: ${entry.label}`, "Artifact: Stderr", "", entry.result.stderr || "(no stderr log)"].join("\n"));
+      }
+      ctx.ui.notify(`Loaded stderr tail for ${entry.label}.`, "info");
+      return;
+    }
+    if (action === "paths") {
+      ctx.ui.setEditorText(buildSubagentPathsText(entry));
+      ctx.ui.notify(`Loaded artifact paths for ${entry.label}.`, "info");
       return;
     }
     ctx.ui.setEditorText(buildSubagentDetailText(entry));

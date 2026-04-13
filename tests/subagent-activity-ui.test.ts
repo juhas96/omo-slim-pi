@@ -293,6 +293,25 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
       hasUI: true,
       ui: {
         theme: fakeTheme(),
+        custom: async () => (++customCalls === 1 ? "0" : "paths"),
+        setWidget() {},
+        setEditorText(text: string) {
+          editorWrites.push(text);
+        },
+        notify() {},
+        setStatus() {},
+        input: async () => "",
+      },
+    });
+    assert.match(editorWrites[1] ?? "", /Debug dir:/);
+    assert.match(editorWrites[1] ?? "", /Stdout:/);
+
+    customCalls = 0;
+    await pantheonSubagents.handler("", {
+      cwd: projectDir,
+      hasUI: true,
+      ui: {
+        theme: fakeTheme(),
         custom: async () => (++customCalls === 1 ? "0" : "trace"),
         setWidget() {},
         setEditorText(text: string) {
@@ -303,7 +322,7 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
         input: async () => "",
       },
     });
-    assert.equal(editorWrites[1] ?? "", "");
+    assert.equal(editorWrites[2] ?? "", "");
     assert.match(commandMessages.at(-1)?.content ?? "", /Command: \/pantheon-debug/);
     assert.match(commandMessages.at(-1)?.content ?? "", /Trace:/);
   } finally {

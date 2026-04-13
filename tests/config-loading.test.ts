@@ -26,6 +26,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     // JSONC support
     "preset": "fast",
     "background": { "reuseSessions": true, "heartbeatIntervalMs": 900, "staleAfterMs": 12000 },
+    "fallback": { "finalMessageGraceMs": 2200 },
     "skills": {
       "defaultAllow": ["cartography"],
       "cartography": { "enabled": true, "maxFiles": 120 }
@@ -72,6 +73,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.equal(result.config.background?.heartbeatIntervalMs, 900);
     assert.equal(result.config.background?.staleAfterMs, 12000);
     assert.equal(result.config.fallback?.retryOnEmpty, true);
+    assert.equal(result.config.fallback?.finalMessageGraceMs, 2200);
     assert.equal(result.config.research?.maxResults, 9);
     assert.equal(result.config.updates?.notify, false);
     assert.equal(result.config.updates?.checkIntervalHours, 12);

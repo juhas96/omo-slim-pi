@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { AgentConfig } from "./agents.js";
 import type { PantheonConfig } from "./config.js";
 import { loadPantheonConfig } from "./config.js";
-import { getFallbackModels, resolveBackgroundAttemptTimeoutMs } from "./hooks/fallback.js";
+import { getFallbackModels, resolveBackgroundAttemptTimeoutMs, resolveFinalMessageGraceMs } from "./hooks/fallback.js";
 import type { BackgroundTaskRecord, BackgroundTaskSpec } from "./types.js";
 
 const SUBAGENT_ENV = "OH_MY_OPENCODE_PI_SUBAGENT";
@@ -437,6 +437,7 @@ export function enqueueBackgroundSpec(
     ...seed,
     logPath,
     resultPath,
+    finalMessageGraceMs: seed.finalMessageGraceMs ?? resolveFinalMessageGraceMs(config),
     heartbeatIntervalMs: seed.heartbeatIntervalMs ?? config.background?.heartbeatIntervalMs ?? 1500,
     staleAfterMs: seed.staleAfterMs ?? config.background?.staleAfterMs ?? 20000,
     meta: record,
@@ -493,6 +494,7 @@ export function launchBackgroundTask(
     timeoutMs: resolveBackgroundAttemptTimeoutMs(config),
     retryDelayMs: Math.max(0, Math.floor(config.fallback?.retryDelayMs ?? 500)),
     retryOnEmpty: config.fallback?.retryOnEmpty !== false,
+    finalMessageGraceMs: resolveFinalMessageGraceMs(config),
     includeProjectAgents,
     depth: options.currentDepth,
   }, {
@@ -530,6 +532,7 @@ export function retryBackgroundTask(
     timeoutMs: spec.timeoutMs,
     retryDelayMs: spec.retryDelayMs,
     retryOnEmpty: spec.retryOnEmpty,
+    finalMessageGraceMs: spec.finalMessageGraceMs,
     heartbeatIntervalMs: spec.heartbeatIntervalMs,
     staleAfterMs: spec.staleAfterMs,
     includeProjectAgents: spec.includeProjectAgents,

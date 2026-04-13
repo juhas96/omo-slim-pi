@@ -71,6 +71,7 @@ export interface BackgroundTaskSpec {
   timeoutMs?: number;
   retryDelayMs?: number;
   retryOnEmpty?: boolean;
+  finalMessageGraceMs?: number;
   heartbeatIntervalMs?: number;
   staleAfterMs?: number;
   logPath: string;

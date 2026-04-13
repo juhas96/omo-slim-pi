@@ -62,7 +62,7 @@ test("pantheon_delegate resolves shortly after a final assistant message even if
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
   fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.json"), JSON.stringify({
-    fallback: { delegateTimeoutMs: 5000, retryOnEmpty: false },
+    fallback: { delegateTimeoutMs: 5000, retryOnEmpty: false, finalMessageGraceMs: 50 },
     workflow: { persistTodos: false },
   }, null, 2));
 
@@ -92,7 +92,7 @@ test("pantheon_delegate resolves shortly after a final assistant message even if
     const durationMs = Date.now() - startedAt;
     assert.equal(result.isError, false);
     assert.match(result.content[0]?.text ?? "", /ok:Task:/);
-    assert.ok(durationMs < 4000, `Expected fast completion after final message, got ${durationMs}ms`);
+    assert.ok(durationMs < 1200, `Expected configurable fast completion after final message, got ${durationMs}ms`);
   } finally {
     process.argv[1] = originalArgv1;
   }

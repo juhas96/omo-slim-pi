@@ -99,6 +99,11 @@
           "default": true,
           "description": "Treat silent empty model responses as failures and continue the fallback chain."
         },
+        "finalMessageGraceMs": {
+          "type": "number",
+          "default": 1500,
+          "description": "After a final assistant message arrives, wait this long before terminating a lingering child process to hand control back faster."
+        },
         "agentTimeouts": {
           "type": "object",
           "additionalProperties": { "type": "number" },

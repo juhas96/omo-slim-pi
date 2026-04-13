@@ -163,7 +163,8 @@ Use fallback chains when one model is ideal but you want graceful degradation.
       "explorer": ["openai/gpt-4.1-mini"],
       "librarian": ["openai/gpt-4.1-mini"]
     },
-    "councilMaster": ["openai/gpt-4.1"]
+    "councilMaster": ["openai/gpt-4.1"],
+    "finalMessageGraceMs": 1500
   }
 }
 ```
@@ -177,6 +178,7 @@ Use fallback chains when one model is ideal but you want graceful degradation.
 - Give `designer` a model you trust for UI polish and broader synthesis.
 - Keep council diverse when you want real second opinions; three copies of the same model rarely add much.
 - If a provider is flaky, bias toward fallback chains and longer council timeouts.
+- If a provider prints a final answer but lingers before exiting, tune `fallback.finalMessageGraceMs` instead of raising the full attempt timeout.
 
 See also:
 

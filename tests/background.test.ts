@@ -118,6 +118,7 @@ test("background runner completes soon after a final assistant message even if t
 
   fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.json"), JSON.stringify({
     background: { enabled: true, logDir: taskDir, maxConcurrent: 1, reuseSessions: false, heartbeatIntervalMs: 250, staleAfterMs: 5000 },
+    fallback: { finalMessageGraceMs: 50 },
     workflow: { persistTodos: false },
   }, null, 2));
 
@@ -160,7 +161,7 @@ test("background runner completes soon after a final assistant message even if t
     const durationMs = Date.now() - startedAt;
     assert.equal(completed?.status, "completed");
     assert.match(completed?.summary ?? "", /background ok:/i);
-    assert.ok(durationMs < 4000, `Expected fast background completion after final message, got ${durationMs}ms`);
+    assert.ok(durationMs < 1200, `Expected configurable fast background completion after final message, got ${durationMs}ms`);
   } finally {
     if (previous === undefined) delete process.env[AGENT_DIR_ENV];
     else process.env[AGENT_DIR_ENV] = previous;

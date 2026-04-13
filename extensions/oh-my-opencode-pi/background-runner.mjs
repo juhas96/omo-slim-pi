@@ -60,7 +60,6 @@ function sleep(ms) {
 }
 
 const CORE_CLI_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
-const SUBAGENT_FINAL_MESSAGE_GRACE_MS = 1500;
 
 function canUseCliToolFilter(tools) {
   return Boolean(tools?.length) && tools.every((tool) => CORE_CLI_TOOL_NAMES.has(tool));
@@ -133,6 +132,7 @@ async function runAttempt(spec, model) {
     const log = fs.createWriteStream(spec.logPath, { flags: "a" });
     let buffer = "";
     let lingerTimer;
+    const finalMessageGraceMs = Number.isFinite(spec.finalMessageGraceMs) ? Math.max(0, Math.floor(spec.finalMessageGraceMs)) : 1500;
 
     const clearLingerTimer = () => {
       if (!lingerTimer) return;
@@ -145,7 +145,7 @@ async function runAttempt(spec, model) {
       lingerTimer = setTimeout(() => {
         lingerTimer = undefined;
         if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
-      }, SUBAGENT_FINAL_MESSAGE_GRACE_MS);
+      }, finalMessageGraceMs);
     };
 
     const processLine = (line) => {
