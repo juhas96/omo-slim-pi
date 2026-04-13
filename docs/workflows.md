@@ -56,24 +56,25 @@ Start with:
 
 ### Foreground command results
 
-Commands like:
+Non-interactive commands like:
 - `/pantheon-runtime`
 - `/pantheon-config`
 - `/pantheon-adapters`
+- `/pantheon-doctor`
 - `/pantheon-result`
 
-now use three consistent surfaces:
+now use two consistent result surfaces:
 
 - **editor report** — full structured output
-- **chat report** — labeled command result in the conversation timeline
 - **command widget** — compact status + summary below the editor
 
+Warnings and errors can also raise a notification.
+
+Interactive delegation flows like `/pantheon` and `/pantheon-council` still add a labeled **chat report** when a timeline entry helps preserve the prompt/result trail.
 Long-running delegate and council commands stream **running** widget updates while work is still in progress, then replace those partial summaries with the final result.
 
 Use the editor report when you need the full output.
 Use the widget when you only need quick confirmation of what command ran and what to do next.
-
-`/pantheon-doctor` is slightly different: it stays in the editor + command widget (and uses a notification for warnings/errors) instead of posting a chat report.
 
 ### Subagent activity
 

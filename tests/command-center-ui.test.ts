@@ -218,7 +218,7 @@ test("pantheon council command executes natively without injecting prompt text i
   }
 });
 
-test("pantheon-as executes delegate natively without injecting prompt text into chat", async () => {
+test("pantheon-as executes delegate natively without posting the result into chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-as-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -267,11 +267,8 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
 
     assert.equal(sentMessages.length, 0);
     assert.equal(editorWrites.length, 1);
-    assert.equal(commandMessages.length, 1);
-    assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
-    assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-as/);
-    assert.match(commandMessages[0]?.content ?? "", /ok:Task:/);
-    assert.equal(commandMessages[0]?.details?.status, "success");
+    assert.match(editorWrites[0] ?? "", /Command: \/pantheon-as/);
+    assert.equal(commandMessages.length, 0);
     assert.ok(widgetWrites.length > 0);
     assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-as/);
   } finally {
@@ -279,7 +276,7 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
   }
 });
 
-test("pantheon-runtime presents labeled command output in chat and the widget", async () => {
+test("pantheon-runtime keeps labeled command output out of chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-runtime-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -312,16 +309,13 @@ test("pantheon-runtime presents labeled command output in chat and the widget", 
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-runtime/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
-  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-runtime/);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon runtime report/);
+  assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-runtime/);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /✓ ready/);
 });
 
-test("pantheon-config opens a structured config report in chat and the editor", async () => {
+test("pantheon-config keeps the structured config report out of chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-config-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -358,15 +352,12 @@ test("pantheon-config opens a structured config report in chat and the editor", 
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-config/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-config/);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon config report/);
-  assert.match(commandMessages[0]?.content ?? "", /Background & multiplexer:/);
+  assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-config/);
 });
 
-test("pantheon-adapters opens an adapter policy report in chat", async () => {
+test("pantheon-adapters keeps the adapter policy report out of chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-adapters-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -399,10 +390,7 @@ test("pantheon-adapters opens an adapter policy report in chat", async () => {
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-adapters/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-adapters/);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon adapter policy/);
-  assert.match(commandMessages[0]?.content ?? "", /Allowed adapters:/);
+  assert.equal(commandMessages.length, 0);
 });
 
 test("pantheon-doctor keeps the health report in editor/widget surfaces", async () => {
@@ -508,12 +496,10 @@ test("pantheon-task-actions routes task actions through an interactive menu", as
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-result/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-result/);
-  assert.match(commandMessages[0]?.content ?? "", /all done/);
+  assert.equal(commandMessages.length, 0);
 });
 
-test("pantheon-as streams partial command output in widgets before posting the final result to chat", async () => {
+test("pantheon-as streams partial command output in widgets before keeping the final result in editor/widget surfaces", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-as-streaming-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -576,9 +562,8 @@ test("pantheon-as streams partial command output in widgets before posting the f
     assert.equal(sentMessages.length, 0);
     assert.equal(editorWrites.length, 1);
     assert.match(editorWrites[0] ?? "", /Command: \/pantheon-as/);
-    assert.equal(commandMessages.length, 1);
-    assert.equal(commandMessages[0]?.details?.status, "success");
-    assert.match(commandMessages[0]?.content ?? "", /final:/i);
+    assert.match(editorWrites[0] ?? "", /final:/i);
+    assert.equal(commandMessages.length, 0);
     assert.ok(widgetWrites.some((lines) => /… running/.test(lines.join("\n")) && /partial:/i.test(lines.join("\n"))));
   } finally {
     process.argv[1] = originalArgv1;

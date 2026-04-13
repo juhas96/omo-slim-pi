@@ -19,14 +19,15 @@ export interface PantheonCommandPresentationOptions {
 
 function inferDefaultModes(command: string, status: CommandOutputStatus): PantheonPresentationMode[] {
   if (status === "running") return ["widget-summary"];
-  if (command === "/pantheon-council" || command === "/pantheon" || command === "/pantheon-as") {
-    return status === "error"
+  const usesChatTimeline = command === "/pantheon-council" || command === "/pantheon";
+  if (usesChatTimeline) {
+    return status === "error" || status === "warning"
       ? ["widget-summary", "chat-message", "editor-report", "notify"]
       : ["widget-summary", "chat-message", "editor-report"];
   }
   return status === "error" || status === "warning"
-    ? ["widget-summary", "chat-message", "editor-report", "notify"]
-    : ["widget-summary", "chat-message", "editor-report"];
+    ? ["widget-summary", "editor-report", "notify"]
+    : ["widget-summary", "editor-report"];
 }
 
 export function presentPantheonCommandEditorOutput(

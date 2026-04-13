@@ -330,7 +330,7 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
   }
 });
 
-test("pantheon-debug still posts direct trace inspection through command chat output", async () => {
+test("pantheon-debug keeps direct trace inspection out of chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-subagent-widget-direct-debug-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -393,9 +393,7 @@ test("pantheon-debug still posts direct trace inspection through command chat ou
     });
 
     assert.match(editorText, /Command: \/pantheon-debug/);
-    assert.equal(commandMessages.length, 1);
-    assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-debug/);
-    assert.match(commandMessages[0]?.content ?? "", /Trace:/);
+    assert.equal(commandMessages.length, 0);
   } finally {
     process.argv[1] = originalArgv1;
   }

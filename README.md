@@ -72,8 +72,9 @@ Use Pantheon from the outside in:
    - ask Explorer or Fixer a small, concrete question
 
 3. **Inspect the result**
-   - Pantheon now writes a structured report into the editor
-   - it also posts the same result to chat and keeps a compact widget below the editor
+   - Pantheon writes a structured report into the editor
+   - non-interactive commands keep their output in the editor + compact widget below the editor
+   - interactive delegation flows can also add a labeled chat result when that helps preserve the prompt/response trail
 
 4. **Try one background workflow**
    - start detached work with `pantheon_background`
@@ -85,7 +86,7 @@ Pantheon uses a few consistent surfaces:
 
 - **Command widget** — short result/status line below the editor
 - **Editor report** — full command output for inspection and copy/paste
-- **Chat report** — labeled command result in the conversation timeline
+- **Chat report** — used only for interactive command flows where a timeline entry is useful
 - **Dashboard widget** — the current next-best action, active work, and warnings
 - **Subagent widget** — live delegate/council activity while specialists run
 

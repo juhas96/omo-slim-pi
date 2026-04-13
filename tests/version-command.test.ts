@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
-test("pantheon-version command renders a package version report in chat and the editor", async () => {
+test("pantheon-version command keeps the package version report out of chat", async () => {
   const commands = new Map<string, any>();
   const sentMessages: string[] = [];
   const commandMessages: Array<{ content?: string; details?: any }> = [];
@@ -43,8 +43,8 @@ test("pantheon-version command renders a package version report in chat and the 
 
   assert.equal(sentMessages.length, 0);
   assert.match(editorText, /Command: \/pantheon-version/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon package version report/);
-  assert.match(commandMessages[0]?.content ?? "", /Current version:/);
-  assert.match(commandMessages[0]?.content ?? "", /Local checkout:/);
+  assert.match(editorText, /Pantheon package version report/);
+  assert.match(editorText, /Current version:/);
+  assert.match(editorText, /Local checkout:/);
+  assert.equal(commandMessages.length, 0);
 });
