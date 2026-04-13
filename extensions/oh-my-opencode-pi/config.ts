@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import { parse } from "jsonc-parser";
+import { PANTHEON_USER_AGENT } from "./metadata.js";
 
 export interface CouncilMemberConfig {
   name: string;
@@ -773,7 +774,7 @@ function getDefaultConfig(): PantheonConfig {
     },
     research: {
       timeoutMs: 15000,
-      userAgent: "oh-my-opencode-pi/0.1.0",
+      userAgent: PANTHEON_USER_AGENT,
       maxResults: 5,
       githubToken: undefined,
       defaultDocsSite: undefined,

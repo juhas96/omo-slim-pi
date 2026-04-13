@@ -48,6 +48,13 @@ Use global install when you want Pantheon available in every repository you open
 
 This package also ships a small installer/onboarding CLI for creating project-local Pantheon scaffolding.
 
+Prerequisites before the generated setup is truly usable:
+
+- pi is installed and can load local/global packages
+- at least one provider is configured in pi
+- the generated scaffold defaults delegated specialists to OpenAI models unless you edit them
+- tmux is optional and only needed for multiplexer/background-pane workflows
+
 The generated config includes explicit OpenAI defaults for delegated specialists (`oracle`, `explorer`, `librarian`, `designer`, `fixer`) plus a `review-board` council preset. The top-level pi session model still comes from pi itself.
 
 ```bash
@@ -93,6 +100,8 @@ You can also verify installer output directly:
 ```bash
 oh-my-opencode-pi verify --cwd /path/to/project
 ```
+
+Important: `verify` checks that the expected Pantheon scaffold files were written. It does **not** prove that pi has loaded the extension, that your providers are configured correctly, or that tmux-backed features are available in the current terminal.
 
 ---
 
@@ -142,7 +151,7 @@ Project config is deep-merged on top of global config.
 
 ### `/pantheon` commands are missing
 
-Make sure the package is actually installed in pi, then restart the session after installation.
+Make sure the package is actually installed in pi, then restart the session after installation. The CLI `verify` command only confirms scaffold files exist; runtime verification still needs to happen inside pi.
 
 ### Tmux panes do not open
 

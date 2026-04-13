@@ -26,6 +26,7 @@
     "extensions",
     "prompts",
     "skills",
+    "shared",
     "LICENSE",
     "README.md",
     "codemap.md",
@@ -38,6 +39,8 @@
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
+    "check:docs": "node scripts/check-doc-links.mjs",
+    "check:version-meta": "node scripts/check-version-consistency.mjs",
     "eval:orchestration": "tsx scripts/run-orchestration-bench.ts",
     "pack:dry": "npm pack --dry-run"
   },

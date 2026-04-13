@@ -36,6 +36,8 @@ Related command surfaces:
 - `/pantheon-watch <taskId>` — watch view
 - `/pantheon-result <taskId>` — result view
 - `/pantheon-task-actions <taskId>` — interactive retry/cancel/log/result/watch/attach menu
+- `/pantheon-overview` — workflow + background state together
+- `/pantheon-cleanup` — remove terminal background-task artifacts according to retention rules
 - `/pantheon-subagents` — live subagent inspector with per-agent expand/collapse plus quick actions for details, stdout, stderr, paths, and traces
 - `/pantheon-doctor` — health-check report across config, adapters, tmux, and background storage
 
@@ -116,11 +118,22 @@ Structured adapter tools:
 
 For practical command selection and recovery sequences, see [workflows.md](workflows.md).
 
-
 - `pantheon_stats`
 - `pantheon_runtime_info`
 - `pantheon_hook_trace`
 - `pantheon_multiplexer_status`
+
+Useful maintenance/debug commands:
+
+- `/pantheon-hooks` — inspect hook ordering and restored runtime middleware state
+- `/pantheon-debug-dir` — show the foreground debug trace directory
+- `/pantheon-debugs` — list recent debug traces
+- `/pantheon-debug [traceId]` — inspect a full debug trace
+- `/pantheon-subagents` — inspect live/recent subagent activity and jump to details/traces
+- `/pantheon-auto-continue [on|off]` — toggle auto-continue behavior for persisted todo workflows
+- `/pantheon-todos` — inspect persisted workflow todos
+- `/pantheon-clear-todos` — clear persisted workflow state
+- `/pantheon-as <agent>` — route the next task directly to a specialist from the command line
 
 Useful version/update commands:
 

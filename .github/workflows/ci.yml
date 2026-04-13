@@ -26,5 +26,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Check markdown links
+        run: npm run check:docs
+
+      - name: Check version consistency
+        run: npm run check:version-meta
+
       - name: Package dry run
         run: npm run pack:dry

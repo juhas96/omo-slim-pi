@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { buildPantheonScaffoldConfig, getPantheonScaffoldEntries } from "../../shared/scaffold.mjs";
 
 export interface BootstrapResult {
   rootDir: string;
@@ -7,63 +8,7 @@ export interface BootstrapResult {
 }
 
 export function buildBootstrapConfig(): string {
-  return `{
-  "$schema": "../oh-my-opencode-pi.schema.json",
-  "extends": ["durable"],
-  // The top-level pi session model stays whatever you selected in pi.
-  // These overrides control delegated Pantheon specialists and council runs.
-  "agents": {
-    "oracle": {
-      "model": "openai/gpt-4.1",
-      "variant": "high"
-    },
-    "explorer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low",
-      "allowSkills": ["cartography"],
-      "allowedAdapters": ["local-docs", "docs-context7", "github-code-search", "web-search"]
-    },
-    "librarian": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low",
-      "allowedAdapters": ["local-docs", "docs-context7", "github-releases", "github-code-search", "web-search", "npm-registry"]
-    },
-    "designer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "medium"
-    },
-    "fixer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low"
-    }
-  },
-  "council": {
-    "defaultPreset": "review-board",
-    "presets": {
-      "review-board": {
-        "master": {
-          "model": "openai/gpt-4.1",
-          "variant": "high",
-          "prompt": "Prioritize correctness, maintainability, and operational simplicity."
-        },
-        "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
-          { "name": "architect", "model": "openai/gpt-4.1-mini", "variant": "medium" },
-          { "name": "skeptic", "model": "openai/gpt-4.1-mini", "variant": "medium" }
-        ]
-      }
-    }
-  },
-  "skills": {
-    "defaultAllow": ["cartography"],
-    "cartography": {
-      "enabled": true,
-      "maxFiles": 250,
-      "maxDepth": 4
-    }
-  }
-}
-`;
+  return buildPantheonScaffoldConfig({ tmuxEnabled: false, skillsEnabled: true });
 }
 
 export function bootstrapPantheonProject(cwd: string, options?: { force?: boolean }): BootstrapResult {
@@ -71,12 +16,7 @@ export function bootstrapPantheonProject(cwd: string, options?: { force?: boolea
   const files: string[] = [];
   fs.mkdirSync(rootDir, { recursive: true });
 
-  const entries: Array<{ relativePath: string; content: string }> = [
-    { relativePath: "oh-my-opencode-pi.jsonc", content: buildBootstrapConfig() },
-    { relativePath: path.join("pantheon-adapters", "README.md"), content: "# Pantheon adapters\n\nDrop custom adapter modules (`.mjs`, `.js`, `.cjs`) in this directory to auto-load them.\n" },
-    { relativePath: path.join("agents", "README.md"), content: "# Pantheon agents\n\nOverride or add project-local specialist agents here.\n" },
-    { relativePath: path.join("prompts", "README.md"), content: "# Pantheon prompts\n\nStore project-specific prompt append/override files here.\n" },
-  ];
+  const entries: Array<{ relativePath: string; content: string }> = getPantheonScaffoldEntries({ tmuxEnabled: false, skillsEnabled: true });
 
   for (const entry of entries) {
     const filePath = path.join(rootDir, entry.relativePath);

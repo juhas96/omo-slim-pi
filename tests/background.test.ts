@@ -217,7 +217,8 @@ test("background runner avoids CLI --tools when the agent depends on extension t
 
     await waitFor(() => listBackgroundTasks(taskDir).some((entry) => entry.id === task.id && entry.status === "completed"));
     const completed = listBackgroundTasks(taskDir).find((entry) => entry.id === task.id);
-    const argsText = completed?.result?.messages?.[0]?.content?.[0]?.text ?? "";
+    const firstPart = completed?.result?.messages?.[0]?.content?.[0];
+    const argsText = firstPart && typeof firstPart === "object" && "text" in firstPart ? String(firstPart.text ?? "") : "";
     assert.doesNotMatch(argsText, /"--tools"/);
     assert.match(argsText, /Tool policy:/);
     assert.match(argsText, /pantheon_fetch/);
@@ -300,6 +301,28 @@ test("cleanup removes all terminal background artifacts when keepCount is zero",
   assert.equal(result.removed, 3);
   assert.equal(result.kept, 1);
   assert.deepEqual(listBackgroundTasks(taskDir).map((task) => task.id), ["running"]);
+});
+
+test("listBackgroundTasks ignores corrupt task artifacts instead of throwing", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-corrupt-"));
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  const validPath = path.join(taskDir, "good.result.json");
+  fs.writeFileSync(validPath, JSON.stringify({
+    id: "good",
+    agent: "explorer",
+    task: "Healthy task",
+    status: "completed",
+    createdAt: 1,
+    heartbeatAt: 1,
+    logPath: path.join(taskDir, "good.log"),
+    resultPath: validPath,
+  }, null, 2));
+  fs.writeFileSync(path.join(taskDir, "broken.result.json"), "{ not-json\n", "utf8");
+
+  const tasks = listBackgroundTasks(taskDir);
+  assert.deepEqual(tasks.map((task) => task.id), ["good"]);
 });
 
 test("background reconciliation marks stale jobs and watch views include heartbeat metadata", () => {

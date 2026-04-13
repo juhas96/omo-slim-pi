@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { getPantheonScaffoldEntries, getPantheonScaffoldRequiredPaths } from '../shared/scaffold.mjs';
 
 function usage() {
   console.log(`oh-my-opencode-pi
@@ -37,72 +38,6 @@ function resolveInstallRoot(flags) {
   return path.join(cwd, '.pi');
 }
 
-function buildConfig({ tmuxEnabled, skillsEnabled }) {
-  return `{
-  "$schema": "../oh-my-opencode-pi.schema.json",
-  "extends": ["durable"],
-  // The top-level pi session model stays whatever you selected in pi.
-  // These overrides control delegated Pantheon specialists and council runs.
-  "multiplexer": {
-    "tmux": ${tmuxEnabled ? 'true' : 'false'},
-    "layout": "main-vertical",
-    "focusOnSpawn": false
-  },
-  "agents": {
-    "oracle": {
-      "model": "openai/gpt-4.1",
-      "variant": "high"
-    },
-    "explorer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low",
-      "allowSkills": ${skillsEnabled ? '["cartography"]' : '[]'},
-      "allowedAdapters": ["local-docs", "docs-context7", "github-code-search", "web-search"]
-    },
-    "librarian": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low",
-      "allowedAdapters": ["local-docs", "docs-context7", "github-releases", "github-code-search", "web-search", "npm-registry"]
-    },
-    "designer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "medium"
-    },
-    "fixer": {
-      "model": "openai/gpt-4.1-mini",
-      "variant": "low"
-    }
-  },
-  "council": {
-    "defaultPreset": "review-board",
-    "presets": {
-      "review-board": {
-        "master": {
-          "model": "openai/gpt-4.1",
-          "variant": "high",
-          "prompt": "Prioritize correctness, maintainability, and operational simplicity."
-        },
-        "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
-          { "name": "architect", "model": "openai/gpt-4.1-mini", "variant": "medium" },
-          { "name": "skeptic", "model": "openai/gpt-4.1-mini", "variant": "medium" }
-        ]
-      }
-    }
-  },
-  "skills": {
-    "defaultAllow": ${skillsEnabled ? '["cartography"]' : '[]'},
-    "cartography": {
-      "enabled": ${skillsEnabled ? 'true' : 'false'},
-      "maxFiles": 250,
-      "maxDepth": 4,
-      "maxPerDirectory": 8
-    }
-  }
-}
-`;
-}
-
 function ensureFile(filePath, content, reset) {
   if (!reset && fs.existsSync(filePath)) return false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -117,42 +52,36 @@ function install(flags) {
   const reset = boolFlag(flags.reset, false);
   const configName = boolFlag(flags.global) ? 'oh-my-opencode-pi.jsonc' : 'oh-my-opencode-pi.jsonc';
   const created = [];
-  const files = [
-    [path.join(root, configName), buildConfig({ tmuxEnabled, skillsEnabled })],
-    [path.join(root, 'pantheon-adapters', 'README.md'), '# Pantheon adapters\n\nDrop custom adapter modules (`.mjs`, `.js`, `.cjs`) in this directory to auto-load them.\n'],
-    [path.join(root, 'agents', 'README.md'), '# Pantheon agents\n\nOverride or add project-local specialist agents here.\n'],
-    [path.join(root, 'prompts', 'README.md'), '# Pantheon prompts\n\nStore project-specific prompt append/override files here.\n'],
-  ];
+  const files = getPantheonScaffoldEntries({ tmuxEnabled, skillsEnabled })
+    .map((entry) => [path.join(root, entry.relativePath), entry.content]);
   for (const [filePath, content] of files) {
     if (ensureFile(filePath, content, reset)) created.push(filePath);
   }
-  console.log('Pantheon installer complete');
+  console.log('Pantheon scaffold install complete');
   console.log(`Root: ${root}`);
   console.log(`Created: ${created.length}`);
   for (const filePath of created) console.log(`- ${filePath}`);
   console.log('\nNext steps:');
-  console.log('- Review the generated config');
-  console.log('- Run /pantheon-config inside pi');
+  console.log('- Review the generated config and provider choices');
+  console.log('- Runtime verification happens inside pi: run /pantheon, /pantheon-config, and /pantheon-runtime');
+  console.log('- If you enabled tmux integration, verify you are inside a tmux session before expecting background panes');
   console.log('- Try /pantheon-bootstrap or /pantheon-spec-studio if you want guided setup/spec flows');
 }
 
 function verify(flags) {
   const root = resolveInstallRoot(flags);
-  const required = [
-    path.join(root, 'oh-my-opencode-pi.jsonc'),
-    path.join(root, 'pantheon-adapters', 'README.md'),
-    path.join(root, 'agents', 'README.md'),
-    path.join(root, 'prompts', 'README.md'),
-  ];
+  const required = getPantheonScaffoldRequiredPaths().map((relativePath) => path.join(root, relativePath));
   const missing = required.filter((filePath) => !fs.existsSync(filePath));
   if (missing.length > 0) {
-    console.error('Pantheon install verification failed');
+    console.error('Pantheon scaffold verification failed');
     for (const filePath of missing) console.error(`- missing ${filePath}`);
     process.exitCode = 1;
     return;
   }
-  console.log('Pantheon install verified');
+  console.log('Pantheon scaffold verified');
   for (const filePath of required) console.log(`- ok ${filePath}`);
+  console.log('\nNote: this verifies generated scaffold files only.');
+  console.log('For runtime readiness, open pi in the target project and run /pantheon, /pantheon-config, and /pantheon-runtime.');
 }
 
 const flags = parseArgs(process.argv.slice(2));

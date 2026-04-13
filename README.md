@@ -38,6 +38,12 @@ Standalone installer / bootstrap CLI:
 
 The generated config includes explicit OpenAI defaults for delegated specialists and a `review-board` council preset. The top-level pi session model still comes from pi itself.
 
+Prerequisites for a successful first run:
+
+- pi is installed and can load the package
+- at least one provider is configured in pi
+- tmux is only needed if you want multiplexer/background-pane features
+
 ```bash
 npx oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
 npx oh-my-opencode-pi verify --cwd /path/to/project
@@ -309,7 +315,7 @@ Minimal example:
 
 ```jsonc
 {
-  "$schema": "./oh-my-opencode-pi.schema.json",
+  "$schema": "../oh-my-opencode-pi.schema.json",
   "extends": ["research", "durable"],
   "agents": {
     "oracle": { "model": "anthropic/claude-sonnet-4-5", "variant": "high" },

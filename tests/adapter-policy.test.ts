@@ -38,7 +38,7 @@ test("adapter policy supports wildcard allow and deny semantics closer to MCP-st
     const listTool = tools.get("pantheon_adapter_list");
     const result = await listTool.execute("call-1", {}, undefined, undefined, { cwd: projectDir });
     const text = result.content[0]?.text ?? "";
-    const allowedLine = text.split(/\n/).find((line) => line.startsWith("Allowed adapters:")) ?? "";
+    const allowedLine = text.split(/\n/).find((line: string) => line.startsWith("Allowed adapters:")) ?? "";
     assert.match(text, /Allowed adapters:/);
     assert.doesNotMatch(allowedLine, /github-releases/);
     assert.doesNotMatch(allowedLine, /grep-app/);

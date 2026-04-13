@@ -54,8 +54,15 @@ function readBackgroundTaskFile(filePath: string): BackgroundTaskRecord | undefi
   }
 }
 
+function writeJsonAtomic(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2));
+  fs.renameSync(tempPath, filePath);
+}
+
 function writeBackgroundTask(task: BackgroundTaskRecord): void {
-  fs.writeFileSync(task.resultPath, JSON.stringify(task, null, 2));
+  writeJsonAtomic(task.resultPath, task);
 }
 
 export function listBackgroundTasks(taskDir: string): BackgroundTaskRecord[] {
@@ -507,8 +514,8 @@ export function enqueueBackgroundSpec(
     depth: seed.depth ?? 0,
   };
 
-  fs.writeFileSync(resultPath, JSON.stringify(record, null, 2));
-  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+  writeJsonAtomic(resultPath, record);
+  writeJsonAtomic(specPath, spec);
   options.onEnqueue?.(id);
 
   if (runningNow < maxConcurrent) {
@@ -521,7 +528,7 @@ export function enqueueBackgroundSpec(
       ? `Retry of ${options.retryOf} queued (waiting for free worker slot; max concurrent ${maxConcurrent})`
       : `Queued (waiting for free worker slot; max concurrent ${maxConcurrent})`,
   };
-  fs.writeFileSync(resultPath, JSON.stringify(queued, null, 2));
+  writeJsonAtomic(resultPath, queued);
   return queued;
 }
 
@@ -717,6 +724,6 @@ export function cancelBackgroundTask(task: BackgroundTaskRecord, multiplexer?: P
     heartbeatAt: Date.now(),
     summary: task.summary ?? "Cancelled by user",
   };
-  fs.writeFileSync(task.resultPath, JSON.stringify(updated, null, 2));
+  writeJsonAtomic(task.resultPath, updated);
   return updated;
 }

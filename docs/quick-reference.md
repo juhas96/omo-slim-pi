@@ -36,6 +36,30 @@
 |-----|----------|
 | [Author-style Preset](authors-preset.md) | A practical mixed-provider preset for daily Pantheon usage in pi |
 
+## Command quick reference
+
+### Daily commands
+
+- `/pantheon` — open the Pantheon command center
+- `/pantheon-config` — inspect merged config and diagnostics
+- `/pantheon-runtime` — inspect runtime/parity status
+- `/pantheon-overview` — combined workflow + background status
+- `/pantheon-task-actions <taskId>` — one menu for recovery/inspection actions
+- `/pantheon-spec-studio` — create a structured spec template in the editor
+- `/pantheon-as <agent>` — route the next task directly to a specialist
+
+### Debug / maintenance commands
+
+- `/pantheon-hooks` — inspect hook ordering and restored runtime middleware state
+- `/pantheon-debug-dir` — show the foreground debug trace directory
+- `/pantheon-debugs` — list recent debug traces
+- `/pantheon-debug [traceId]` — inspect a full debug trace
+- `/pantheon-subagents` — inspect live/recent subagent activity and jump to trace details
+- `/pantheon-auto-continue [on|off]` — toggle auto-continue behavior for unchecked todos
+- `/pantheon-todos` — inspect persisted workflow todos
+- `/pantheon-clear-todos` — clear persisted workflow todos/state
+- `/pantheon-cleanup` — remove terminal background-task artifacts according to retention rules
+
 ## Suggested reading order
 
 1. [installation.md](installation.md)

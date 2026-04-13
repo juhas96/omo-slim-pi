@@ -144,6 +144,9 @@ import {
 } from "./presentation.js";
 import { smartFetch } from "./smartfetch.js";
 import { checkForPackageUpdates, renderPackageUpdateReport } from "./update-checker.js";
+import { PANTHEON_USER_AGENT } from "./metadata.js";
+import { registerPantheonNamedCommands } from "./command-registry.js";
+import { registerPantheonCodeTools } from "./tool-registry.js";
 
 export { selectAdapterIds, summarizeAdapterSearchSections } from "./adapter-selection.js";
 
@@ -1922,7 +1925,7 @@ function buildAdapterHealthLines(results: Array<{ adapter: PantheonAdapter; heal
 
 function buildAdapterModuleContext(cwd: string, config: PantheonConfig, signal?: AbortSignal): PantheonAdapterModuleContext {
   const timeoutMs = config.research?.timeoutMs ?? 15000;
-  const userAgent = config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0";
+  const userAgent = config.research?.userAgent ?? PANTHEON_USER_AGENT;
   const defaultDocsSite = config.research?.defaultDocsSite;
   const githubToken = resolveGithubToken(config);
   return {
@@ -2107,7 +2110,7 @@ async function searchGithubCode(
 
 function getBuiltInAdapters(cwd: string, config: PantheonConfig): PantheonAdapter[] {
   const timeoutMs = config.research?.timeoutMs ?? 15000;
-  const userAgent = config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0";
+  const userAgent = config.research?.userAgent ?? PANTHEON_USER_AGENT;
   const defaultDocsSite = config.research?.defaultDocsSite;
   const githubToken = resolveGithubToken(config);
 
@@ -3527,21 +3530,24 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.notify(`Loaded subagent details for ${entry.label}.`, "info");
   }
 
-  pi.registerCommand("review", {
-    description: "Review uncommitted changes, committed ranges, commits, or pull requests with a defined review prompt",
-    getArgumentCompletions: (prefix) => {
-      const trimmed = prefix.trimStart();
-      if (trimmed.includes(" ")) return [];
-      return REVIEW_MODES
-        .filter((mode) => mode.startsWith(trimmed))
-        .map((mode) => ({ value: mode, label: mode }));
-    },
-    handler: handleReviewCommand,
-  });
-
-  pi.registerCommand("pantheon-agents", {
-    description: "List available Pantheon agents",
-    handler: handlePantheonAgentsCommand,
+  registerPantheonNamedCommands(pi.registerCommand.bind(pi), {
+    handleReviewCommand,
+    handlePantheonAgentsCommand,
+    handlePantheonCouncilCommand,
+    handlePantheonSpecStudioCommand,
+    handlePantheonBootstrapCommand,
+    handlePantheonAsCommand,
+    handlePantheonAttachCommand,
+    handlePantheonAttachAllCommand,
+    handlePantheonSubagentsCommand,
+    handlePantheonWatchCommand,
+    handlePantheonResultCommand,
+    handlePantheonTodosCommand,
+    handlePantheonOverviewCommand,
+    handlePantheonResumeCommand,
+    handlePantheonRetryCommand,
+    handlePantheonBackgroundActionsCommand,
+    reviewModes: REVIEW_MODES,
   });
 
   pi.registerCommand("pantheon", {
@@ -3703,11 +3709,6 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("pantheon-council", {
-    description: "Interactively ask the council",
-    handler: handlePantheonCouncilCommand,
-  });
-
   pi.registerCommand("pantheon-config", {
     description: "Show oh-my-opencode-pi config sources and warnings",
     handler: async (_args, ctx) => {
@@ -3816,11 +3817,6 @@ export default function (pi: ExtensionAPI) {
     handler: handlePantheonDebugCommand,
   });
 
-  pi.registerCommand("pantheon-subagents", {
-    description: "Inspect live or recent Pantheon subagent activity and jump to detailed logs/traces",
-    handler: handlePantheonSubagentsCommand,
-  });
-
   pi.registerCommand("pantheon-auto-continue", {
     description: "Toggle Pantheon auto-continue",
     handler: async (args, ctx) => {
@@ -3834,25 +3830,6 @@ export default function (pi: ExtensionAPI) {
       updatePantheonDashboard(ctx, config);
       ctx.ui.notify(`Auto-continue ${autoContinueEnabled ? "enabled" : "disabled"}.`, "info");
     },
-  });
-
-  pi.registerCommand("pantheon-spec-studio", {
-    description: "Open an editor-first spec studio template",
-    handler: handlePantheonSpecStudioCommand,
-  });
-
-  pi.registerCommand("pantheon-bootstrap", {
-    description: "Scaffold project-local Pantheon config and starter directories",
-    handler: handlePantheonBootstrapCommand,
-  });
-
-  pi.registerCommand("pantheon-as", {
-    description: "Route the next task directly to a Pantheon specialist",
-    getArgumentCompletions: (prefix) => {
-      const names = ["explorer", "librarian", "oracle", "designer", "fixer", "council"];
-      return names.filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name }));
-    },
-    handler: handlePantheonAsCommand,
   });
 
   pi.registerCommand("pantheon-backgrounds", {
@@ -3870,23 +3847,6 @@ export default function (pi: ExtensionAPI) {
         summary: `Background overview with ${tasks.length} task${tasks.length === 1 ? "" : "s"}`,
         notifyMessage: "Loaded Pantheon background overview into editor.",
       });
-    },
-  });
-
-  pi.registerCommand("pantheon-attach", {
-    description: "Open a tmux pane for a Pantheon background task log",
-    handler: handlePantheonAttachCommand,
-  });
-
-  pi.registerCommand("pantheon-attach-all", {
-    description: "Open or reuse tmux panes for all queued/running background tasks",
-    handler: async (_args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      const tasks = attachAllBackgroundTaskPanes(listBackgroundTasks(taskDir), config.multiplexer, ctx.cwd);
-      const active = tasks.filter((task) => task.status === "queued" || task.status === "running");
-      ctx.ui.notify(`Attached/reused panes for ${active.length} active background task${active.length === 1 ? "" : "s"}.`, "info");
     },
   });
 
@@ -3974,36 +3934,6 @@ export default function (pi: ExtensionAPI) {
         notifyMessage: `Loaded log tail for ${task.id} into editor.`,
       });
     },
-  });
-
-  pi.registerCommand("pantheon-task-actions", {
-    description: "Choose background task actions from an interactive Pantheon menu",
-    handler: handlePantheonBackgroundActionsCommand,
-  });
-
-  pi.registerCommand("pantheon-watch", {
-    description: "Show live background task metadata and a recent log tail together",
-    handler: handlePantheonWatchCommand,
-  });
-
-  pi.registerCommand("pantheon-result", {
-    description: "Show the final result for a background task",
-    handler: handlePantheonResultCommand,
-  });
-
-  pi.registerCommand("pantheon-todos", {
-    description: "Show persisted Pantheon workflow todos",
-    handler: handlePantheonTodosCommand,
-  });
-
-  pi.registerCommand("pantheon-overview", {
-    description: "Show combined Pantheon workflow and background overview",
-    handler: handlePantheonOverviewCommand,
-  });
-
-  pi.registerCommand("pantheon-resume", {
-    description: "Show a resume brief from persisted workflow state and recent background tasks",
-    handler: handlePantheonResumeCommand,
   });
 
   pi.registerCommand("pantheon-clear-todos", {
@@ -4430,259 +4360,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
-    name: "pantheon_lsp_goto_definition",
-    label: "Pantheon LSP Definition",
-    description: "Locate symbol definitions for TS/JS and JSON/JSONC files using Pi-native language-service integrations.",
-    promptSnippet: "Jump to the definition of a symbol in a TypeScript or JavaScript project.",
-    parameters: LspPositionParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = gotoDefinition(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_hover",
-    label: "Pantheon LSP Hover",
-    description: "Read hover/signature information for TS/JS and JSON/JSONC symbols.",
-    promptSnippet: "Inspect symbol signature and inline documentation before editing or renaming code.",
-    parameters: LspPositionParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = hoverSymbol(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_find_references",
-    label: "Pantheon LSP References",
-    description: "Find symbol references for TS/JS and JSON/JSONC files using Pi-native language-service integrations.",
-    promptSnippet: "Find references to a symbol in a TypeScript or JavaScript project.",
-    parameters: LspReferencesParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = findReferences(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_find_implementations",
-    label: "Pantheon LSP Implementations",
-    description: "Find implementation/reference sites for TS/JS and JSON/JSONC symbols.",
-    promptSnippet: "Locate concrete implementations when tracing behavior from an interface or abstract definition.",
-    parameters: LspPositionParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = findImplementations(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_type_definition",
-    label: "Pantheon LSP Type Definition",
-    description: "Locate TS/JS or JSON/JSONC type/reference definitions for the symbol under the cursor.",
-    promptSnippet: "Jump to the underlying type definition when inspecting inferred or aliased types.",
-    parameters: LspPositionParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = getTypeDefinitions(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_symbols",
-    label: "Pantheon LSP Symbols",
-    description: "List document or workspace symbols for TS/JS projects and JSON/JSONC files.",
-    promptSnippet: "Inspect high-level symbol structure in a file or search for symbols across the current TS/JS project.",
-    parameters: LspSymbolsParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = listSymbols(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_diagnostics",
-    label: "Pantheon LSP Diagnostics",
-    description: "Read TS/JS or JSON/JSONC diagnostics for a file or the nearest configured project/file.",
-    promptSnippet: "Inspect TypeScript or JavaScript diagnostics before or after edits.",
-    parameters: LspDiagnosticsParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = getDiagnostics(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result, isError: result.diagnostics.some((diagnostic) => diagnostic.category === "error") };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_rename",
-    label: "Pantheon LSP Rename",
-    description: "Preview or apply coordinated TS/JS, JSON/JSONC, or Python symbol renames.",
-    promptSnippet: "Use coordinated renames instead of ad-hoc text edits when changing a symbol name.",
-    parameters: LspRenameParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = renameSymbol(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_lsp_organize_imports",
-    label: "Pantheon Organize Imports",
-    description: "Preview or apply organize-imports code actions for TS/JS files.",
-    promptSnippet: "Use a structured import organization pass after refactors instead of hand-editing import blocks.",
-    parameters: OrganizeImportsParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = organizeImports(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_format_document",
-    label: "Pantheon Format Document",
-    description: "Preview or apply formatter edits for TS/JS and JSON/JSONC files.",
-    promptSnippet: "Run a formatter pass after making structural edits or before final verification.",
-    parameters: FormatDocumentParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = formatDocument(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_apply_patch",
-    label: "Pantheon Apply Patch",
-    description: "Preview or apply unified diff patches with tolerant hunk matching.",
-    promptSnippet: "Use resilient patch application for larger refactors or when exact edit hunks are likely to drift.",
-    parameters: ApplyPatchParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = applyUnifiedPatch(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_ast_grep_search",
-    label: "Pantheon AST Search",
-    description: "Run structural AST-grep searches against a file or directory.",
-    promptSnippet: "Use structural search when plain text grep is too broad or syntax-aware matching matters.",
-    parameters: AstGrepSearchParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = astGrepSearch(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_ast_grep_replace",
-    label: "Pantheon AST Replace",
-    description: "Preview or apply structural AST-grep rewrites against a file or directory.",
-    promptSnippet: "Use structural replace for syntax-aware transformations instead of brittle text replacement.",
-    parameters: AstGrepReplaceParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const result = astGrepReplace(ctx.cwd, params);
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_repo_map",
-    label: "Pantheon Repo Map",
-    description: "Build a repository map summary for reconnaissance and planning.",
-    promptSnippet: "Survey project structure, key files, directory hotspots, and entry points before planning large changes.",
-    parameters: RepoMapParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const config = loadPantheonConfig(ctx.cwd).config;
-        const result = buildRepoMap(ctx.cwd, {
-          path: params.path,
-          maxFiles: params.maxFiles ?? config.skills?.cartography?.maxFiles,
-          maxDepth: params.maxDepth ?? config.skills?.cartography?.maxDepth,
-          maxPerDirectory: params.maxPerDirectory ?? config.skills?.cartography?.maxPerDirectory,
-          includeHidden: params.includeHidden,
-          exclude: config.skills?.cartography?.exclude,
-        });
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_code_map",
-    label: "Pantheon Code Map",
-    description: "Build a semantic code map with entrypoints, import edges, and key symbols.",
-    promptSnippet: "Use semantic cartography when architecture, boundaries, imports, or important symbols matter more than the raw file tree.",
-    parameters: CodeMapParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const config = loadPantheonConfig(ctx.cwd).config;
-        const result = buildCodeMap(ctx.cwd, {
-          path: params.path,
-          maxFiles: params.maxFiles ?? config.skills?.cartography?.maxFiles,
-          maxSymbols: params.maxSymbols,
-          maxEdges: params.maxEdges,
-        });
-        return { content: [{ type: "text", text: result.text }], details: result };
-      } catch (error) {
-        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], details: undefined, isError: true };
-      }
-    },
-  });
+  registerPantheonCodeTools(pi.registerTool.bind(pi));
 
   pi.registerTool({
     name: "pantheon_stats",
@@ -4835,7 +4513,7 @@ export default function (pi: ExtensionAPI) {
         const config = loadPantheonConfig(ctx.cwd).config;
         const result = await smartFetch(params.url, {
           timeoutMs: config.research?.timeoutMs ?? 15000,
-          userAgent: config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+          userAgent: config.research?.userAgent ?? PANTHEON_USER_AGENT,
           signal,
           preferLlmsTxt: params.preferLlmsTxt === "always" || params.preferLlmsTxt === "never" ? params.preferLlmsTxt : "auto",
           extractMain: params.extractMain !== false,
@@ -4858,7 +4536,7 @@ export default function (pi: ExtensionAPI) {
     parameters: FetchParams,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const config = loadPantheonConfig(ctx.cwd).config;
-      const text = await fetchText(params.url, config.research?.timeoutMs ?? 15000, config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0", signal);
+      const text = await fetchText(params.url, config.research?.timeoutMs ?? 15000, config.research?.userAgent ?? PANTHEON_USER_AGENT, signal);
       return { content: [{ type: "text", text: previewText(text, 8000) }], details: { url: params.url } };
     },
   });
@@ -4876,7 +4554,7 @@ export default function (pi: ExtensionAPI) {
         params.path,
         params.ref,
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         signal,
         config.research?.githubToken,
       );
@@ -4896,7 +4574,7 @@ export default function (pi: ExtensionAPI) {
         params.package,
         params.version,
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         signal,
       );
       return { content: [{ type: "text", text }], details: { package: params.package, version: params.version ?? "latest" } };
@@ -4915,7 +4593,7 @@ export default function (pi: ExtensionAPI) {
         params.package,
         params.version,
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         signal,
         Math.max(1000, Math.floor(params.maxChars ?? 12000)),
         config.research?.githubToken,
@@ -4938,14 +4616,14 @@ export default function (pi: ExtensionAPI) {
         params.repo,
         params.site,
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         signal,
       );
       const results = params.topic?.trim()
         ? await webSearchResults(
             params.topic.trim(),
             config.research?.timeoutMs ?? 15000,
-            config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+            config.research?.userAgent ?? PANTHEON_USER_AGENT,
             Math.max(1, Math.floor(params.maxResults ?? 5)),
             signal,
             resolved.docsSite ? "docs" : "github",
@@ -4978,7 +4656,7 @@ export default function (pi: ExtensionAPI) {
         const text = await fetchDocsEntry(
           params,
           config.research?.timeoutMs ?? 15000,
-          config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+          config.research?.userAgent ?? PANTHEON_USER_AGENT,
           signal,
           Math.max(1000, Math.floor(params.maxChars ?? 12000)),
         );
@@ -5001,7 +4679,7 @@ export default function (pi: ExtensionAPI) {
         params.repo,
         Math.max(1, Math.floor(params.limit ?? 5)),
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         signal,
         config.research?.githubToken,
       );
@@ -5020,7 +4698,7 @@ export default function (pi: ExtensionAPI) {
       const text = await webSearch(
         params.query,
         config.research?.timeoutMs ?? 15000,
-        config.research?.userAgent ?? "oh-my-opencode-pi/0.1.0",
+        config.research?.userAgent ?? PANTHEON_USER_AGENT,
         config.research?.maxResults ?? 5,
         signal,
         params.scope,
