@@ -256,12 +256,12 @@ test("background reconciliation marks stale jobs and watch views include heartbe
   const watch = renderBackgroundWatch(watchedTask, 10, 5_000);
   assert.match(watch, /Session key:/);
   assert.match(watch, /Heartbeat:/);
-  assert.match(watch, /Duration:/);
-  assert.match(watch, /Suggested next steps:/);
-  assert.match(watch, /Log tail:/);
+  assert.match(watch, /stale • failed • explorer • 12s/);
+  assert.match(watch, /Next:/);
+  assert.match(watch, /Recent log:/);
 
   const result = renderBackgroundResult(watchedTask, { includeLogTail: true, logLines: 5, staleAfterMs: 5_000 });
-  assert.match(result, /Suggested next steps:/);
-  assert.match(result, /Retry task:/);
-  assert.match(result, /Log tail:/);
+  assert.match(result, /Next:/);
+  assert.match(result, /\/pantheon-retry stale/);
+  assert.match(result, /Recent log:/);
 });

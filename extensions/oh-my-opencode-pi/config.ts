@@ -36,6 +36,7 @@ export interface AgentOverrideConfig {
 }
 
 export interface PantheonConfig {
+  enabled?: boolean;
   appendOrchestratorPrompt?: boolean;
   agents?: Record<string, AgentOverrideConfig>;
   council?: {
@@ -173,6 +174,7 @@ const TOP_LEVEL_CONFIG_KEYS = new Set([
   "preset",
   "extends",
   "presets",
+  "enabled",
   "appendOrchestratorPrompt",
   "agents",
   "council",
@@ -731,6 +733,7 @@ function sanitizeAgentOverride(value: unknown, agentName: string, warnings: stri
 
 function getDefaultConfig(): PantheonConfig {
   return {
+    enabled: true,
     appendOrchestratorPrompt: true,
     agents: {},
     council: {
@@ -847,6 +850,10 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
       activePresets: [],
       availablePresets: Object.keys(DEFAULT_CONFIG_PRESETS),
     };
+  }
+
+  if (typeof input.enabled === "boolean") {
+    config.enabled = input.enabled;
   }
 
   if (typeof input.appendOrchestratorPrompt === "boolean") {

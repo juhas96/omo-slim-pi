@@ -250,8 +250,8 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
       },
     });
     const finalText = commandMessages.at(-1)?.content ?? "";
-    const partialCount = widgetWrites.filter((lines) => /WARNING/i.test(lines.join("\n"))).length;
-    const passed = editorWrites.length === 0 && partialCount > 0 && /Status: success/i.test(finalText) && /Council preset: default/i.test(finalText);
+    const partialCount = widgetWrites.filter((lines) => /… running/i.test(lines.join("\n"))).length;
+    const passed = editorWrites.length === 1 && partialCount > 0 && /Status: success/i.test(finalText) && /Council preset: default/i.test(finalText);
     const normalizeCouncilWidgetLine = (line: string): string => {
       const normalized = line.replace(/\(\d+ms\)/g, "(<elapsed>)");
       if (normalized.includes("· councillors |")) {
@@ -448,7 +448,7 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
       .replace(/Workflow state file: (present|not yet created) — .+/g, "Workflow state file: $1 — <WORKFLOW_STATE>")
       .replace(/tmux available: (yes|no)/g, "tmux available: <detected>")
       .replace(/inside tmux: (yes|no)/g, "inside tmux: <detected>");
-    const passed = editorWrites.length === 0 && /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
+    const passed = editorWrites.length === 1 && /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
     return {
       scenarioId: def.id,
       title: def.title,

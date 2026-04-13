@@ -2407,7 +2407,7 @@ function rememberBackgroundTaskId(ctxCwd: string, config: PantheonConfig, taskId
 
 export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer(PANTHEON_COMMAND_MESSAGE_TYPE, (message, { expanded }, theme) => {
-    const details = message.details as { command?: string; body?: string; status?: "success" | "warning" | "error"; summary?: string } | undefined;
+    const details = message.details as { command?: string; body?: string; status?: "success" | "warning" | "error" | "running"; summary?: string } | undefined;
     if (!details?.command || !details?.body) return new Text(typeof message.content === "string" ? message.content : String(message.content ?? ""), 0, 0);
     return renderPantheonCommandMessage({
       command: details.command,
@@ -2468,10 +2468,71 @@ export default function (pi: ExtensionAPI) {
     | ((params: { prompt: string; preset?: string; includeProjectAgents?: boolean }, signal: AbortSignal | undefined, onUpdate: ((partial: AgentToolResult<any>) => void) | undefined, ctx: ExtensionContext) => Promise<AgentToolResult<any>>)
     | undefined;
   const orchestration = new PantheonOrchestrationRuntime();
+  const commandsAllowedWhenDisabled = new Set(["pantheon-config", "pantheon-bootstrap"]);
+  const toolsAllowedWhenDisabled = new Set(["pantheon_bootstrap"]);
+
+  const isPantheonEnabled = (config: PantheonConfig | undefined) => config?.enabled !== false;
+
+  const clearPantheonUi = (ctx: ExtensionContext) => {
+    ctx.ui.setWidget("oh-my-opencode-pi-dashboard", undefined);
+    clearSubagentActivityWidget(ctx, true);
+    ctx.ui.setStatus(TASK_STATUS_KEY, undefined);
+    ctx.ui.setStatus(WORKFLOW_GUIDANCE_KEY, undefined);
+    ctx.ui.setStatus(AUTO_CONTINUE_KEY, "Auto-continue: off");
+  };
+
+  const formatPantheonDisabledMessage = (configResult: ReturnType<typeof loadPantheonConfig>, subject = "oh-my-opencode-pi") => {
+    const source = configResult.sources.projectPath ?? configResult.sources.globalPath;
+    return `${subject} is disabled in config (${source}). Set "enabled": true and start a new session to re-enable it.`;
+  };
+
+  const baseRegisterCommand = pi.registerCommand.bind(pi);
+  (pi as { registerCommand: typeof pi.registerCommand }).registerCommand = ((name: string, spec: { handler?: (args: string, ctx: ExtensionContext) => unknown }) => {
+    if (typeof spec?.handler !== "function") return baseRegisterCommand(name, spec as never);
+    return baseRegisterCommand(name, {
+      ...spec,
+      handler: async (args: string, ctx: ExtensionContext) => {
+        const configResult = loadPantheonConfig(ctx.cwd);
+        latestConfig = configResult.config;
+        latestWarningCount = configResult.warnings.length;
+        if (!commandsAllowedWhenDisabled.has(name) && !isPantheonEnabled(configResult.config)) {
+          clearPantheonUi(ctx);
+          ctx.ui.setStatus(CONFIG_WARNING_KEY, "oh-my-opencode-pi disabled");
+          ctx.ui.notify(formatPantheonDisabledMessage(configResult, `/${name}`), "warning");
+          return;
+        }
+        return spec.handler?.(args, ctx);
+      },
+    } as never);
+  }) as typeof pi.registerCommand;
+
+  const baseRegisterTool = pi.registerTool.bind(pi);
+  (pi as { registerTool: typeof pi.registerTool }).registerTool = ((tool: { name: string; execute?: (...args: any[]) => unknown }) => {
+    if (typeof tool?.execute !== "function") return baseRegisterTool(tool as never);
+    return baseRegisterTool({
+      ...tool,
+      execute: async (...args: any[]) => {
+        const ctx = args[4] as ExtensionContext | undefined;
+        if (ctx?.cwd) {
+          const configResult = loadPantheonConfig(ctx.cwd);
+          latestConfig = configResult.config;
+          latestWarningCount = configResult.warnings.length;
+          if (!toolsAllowedWhenDisabled.has(tool.name) && !isPantheonEnabled(configResult.config)) {
+            return {
+              content: [{ type: "text", text: formatPantheonDisabledMessage(configResult, tool.name) }],
+              details: { enabled: false },
+              isError: true,
+            };
+          }
+        }
+        return tool.execute?.(...args);
+      },
+    } as never);
+  }) as typeof pi.registerTool;
 
   const updatePantheonDashboard = (ctx: ExtensionContext, config = latestConfig ?? loadPantheonConfig(ctx.cwd).config) => {
     latestConfig = config;
-    if (process.env[SUBAGENT_ENV] === "1" || config.ui?.dashboardWidget === false) {
+    if (!isPantheonEnabled(config) || process.env[SUBAGENT_ENV] === "1" || config.ui?.dashboardWidget === false) {
       ctx.ui.setWidget("oh-my-opencode-pi-dashboard", undefined);
       return;
     }
@@ -2494,7 +2555,7 @@ export default function (pi: ExtensionAPI) {
     const configResult = loadPantheonConfig(ctx.cwd);
     latestConfig = configResult.config;
     latestWarningCount = configResult.warnings.length;
-    autoContinueEnabled = configResult.config.autoContinue?.enabled ?? false;
+    autoContinueEnabled = isPantheonEnabled(configResult.config) ? (configResult.config.autoContinue?.enabled ?? false) : false;
     autoContinueCount = 0;
     if (autoContinueTimer) clearTimeout(autoContinueTimer);
     ctx.ui.setStatus(AUTO_CONTINUE_KEY, autoContinueEnabled ? "Auto-continue: on" : "Auto-continue: off");
@@ -2509,7 +2570,14 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus(CONFIG_WARNING_KEY, `oh-my-opencode-pi config warnings: ${configResult.warnings.length}`);
       ctx.ui.notify(configResult.warnings.join("\n"), "warning");
     } else {
-      ctx.ui.setStatus(CONFIG_WARNING_KEY, "oh-my-opencode-pi ready");
+      ctx.ui.setStatus(CONFIG_WARNING_KEY, isPantheonEnabled(configResult.config) ? "oh-my-opencode-pi ready" : "oh-my-opencode-pi disabled");
+    }
+
+    if (!isPantheonEnabled(configResult.config)) {
+      ctx.ui.setStatus(VERSION_STATUS_KEY, undefined);
+      clearPantheonUi(ctx);
+      recordOrchestration("session_start", `Session ${event.reason} (disabled)`, { reason: event.reason, previousSessionFile: event.previousSessionFile, enabled: false }, ctx);
+      return;
     }
 
     ctx.ui.setStatus(VERSION_STATUS_KEY, undefined);
@@ -2562,6 +2630,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("input", async (event, ctx) => {
+    if (!isPantheonEnabled(loadPantheonConfig(ctx.cwd).config)) return { action: "continue" };
     if (event.source === "interactive" || event.source === "rpc") {
       autoContinueCount = 0;
       updatePantheonDashboard(ctx);
@@ -2570,10 +2639,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("context", async (event, ctx) => {
+    if (!isPantheonEnabled(loadPantheonConfig(ctx.cwd).config)) return;
     recordOrchestration("context", `Prepared ${event.messages.length} context messages`, { messages: event.messages.length }, ctx);
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
+    if (!isPantheonEnabled(loadPantheonConfig(ctx.cwd).config)) return undefined;
     const payload = event.payload as Record<string, unknown> | undefined;
     const provider = typeof payload?.model === "string"
       ? String(payload.model).split("/")[0]
@@ -2585,6 +2656,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_start", async (_event, ctx) => {
+    if (!isPantheonEnabled(loadPantheonConfig(ctx.cwd).config)) {
+      clearPantheonUi(ctx);
+      return;
+    }
     turnFileMutationCount = 0;
     clearSubagentActivityWidget(ctx, true);
     ctx.ui.setStatus(WORKFLOW_GUIDANCE_KEY, "Pantheon phases: scout → plan → implement → verify");
@@ -2598,6 +2673,7 @@ export default function (pi: ExtensionAPI) {
     const started = toolExecutionStarts.get(event.toolCallId);
     toolExecutionStarts.delete(event.toolCallId);
     const config = loadPantheonConfig(ctx.cwd).config;
+    if (!isPantheonEnabled(config)) return;
     const durationMs = started ? Date.now() - started.startedAt : 0;
     const failureKind = classifyFailureKind(event.toolName, event.isError);
     if (event.toolName.startsWith("pantheon_")) {
@@ -2629,9 +2705,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_result", async (event, ctx) => {
+    const config = loadPantheonConfig(ctx.cwd).config;
+    if (!isPantheonEnabled(config)) return;
     recordOrchestration("tool_result", `${event.toolName}${event.isError ? " failed" : " ok"}`, { toolName: event.toolName, isError: event.isError }, ctx);
     if (process.env[SUBAGENT_ENV] === "1") return;
-    const config = loadPantheonConfig(ctx.cwd).config;
     const now = Date.now();
 
     if ((config.workflow?.postFileToolNudges ?? true) && !event.isError && ["edit", "write", "pantheon_ast_grep_replace", "pantheon_lsp_rename", "pantheon_apply_patch"].includes(event.toolName)) {
@@ -2658,8 +2735,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_end", async (event, ctx) => {
-    recordOrchestration("agent_end", `Agent finished with ${event.messages.length} messages`, { messages: event.messages.length }, ctx);
     const config = loadPantheonConfig(ctx.cwd).config;
+    if (!isPantheonEnabled(config)) return;
+    recordOrchestration("agent_end", `Agent finished with ${event.messages.length} messages`, { messages: event.messages.length }, ctx);
     if (process.env[SUBAGENT_ENV] === "1") return;
     const text = event.messages
       .filter((message): message is Message => Boolean(message) && (message as Message).role === "assistant")
@@ -2707,9 +2785,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    recordOrchestration("before_agent_start", previewText(event.prompt, 90), { prompt: previewText(event.prompt, 240), images: event.images?.length ?? 0 }, ctx);
     const configResult = loadPantheonConfig(ctx.cwd);
     const config = configResult.config;
+    if (!isPantheonEnabled(config)) return;
+    recordOrchestration("before_agent_start", previewText(event.prompt, 90), { prompt: previewText(event.prompt, 240), images: event.images?.length ?? 0 }, ctx);
     const currentDepth = Number(process.env[DEPTH_ENV] ?? "0") || 0;
     if (process.env[SUBAGENT_ENV] === "1") return;
     if (currentDepth >= (config.delegation?.maxDepth ?? 3)) return;
@@ -2734,6 +2813,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_call", async (event, ctx) => {
+    if (!isPantheonEnabled(loadPantheonConfig(ctx.cwd).config)) return;
     recordOrchestration("tool_call", `${event.toolName}`, { toolName: event.toolName }, ctx);
     if (event.toolName !== "edit") return;
     const input = event.input as { path?: string; edits?: Array<{ oldText?: string; newText?: string }> };
@@ -2953,37 +3033,55 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
+  function buildBackgroundTaskSelectItems(tasks: BackgroundTaskRecord[], staleAfterMs = 20000) {
+    return tasks.slice(0, 20).map((task) => ({
+      value: task.id,
+      label: `${task.id} · ${task.agent} · ${isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status}`,
+      description: previewText(task.summary ?? task.task, 96),
+    }));
+  }
+
+  async function selectBackgroundTaskId(
+    ctx: ExtensionContext,
+    title: string,
+    tasks: BackgroundTaskRecord[],
+    emptyMessage: string,
+    staleAfterMs = 20000,
+  ): Promise<string | undefined> {
+    if (!ctx.hasUI) return undefined;
+    if (tasks.length === 0) {
+      ctx.ui.notify(emptyMessage, "info");
+      return undefined;
+    }
+    return await showPantheonSelect(ctx, title, buildBackgroundTaskSelectItems(tasks, staleAfterMs)) ?? undefined;
+  }
+
   async function handlePantheonAttachCommand(args: string, ctx: ExtensionContext) {
     const config = loadPantheonConfig(ctx.cwd).config;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
     reconcileBackgroundTasks(taskDir, config.multiplexer);
     let taskId = args.trim();
-    if (!taskId && ctx.hasUI) {
-      const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-      const selected = await showPantheonSelect(
+    if (!taskId) {
+      taskId = await selectBackgroundTaskId(
         ctx,
         "Attach background task pane",
-        tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-      );
-      if (!selected) return;
-      taskId = selected;
-    }
-    if (!taskId) {
-      ctx.ui.notify("Usage: /pantheon-attach <taskId>", "error");
-      return;
+        listBackgroundTasks(taskDir).filter((task) => task.status === "queued" || task.status === "running"),
+        "No active background tasks. Start one with pantheon_background or use /pantheon to launch work.",
+      ) ?? "";
+      if (!taskId) return;
     }
     const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
     if (!task) {
-      ctx.ui.notify(`No task found: ${taskId}`, "error");
+      ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
       return;
     }
     if (!process.env.TMUX || !config.multiplexer?.tmux) {
-      ctx.ui.notify("tmux attach requires running inside tmux with multiplexer.tmux enabled.", "error");
+      ctx.ui.notify("tmux attach requires running inside tmux with multiplexer.tmux enabled. Use /pantheon-watch or /pantheon-log instead.", "error");
       return;
     }
     const updated = attachBackgroundTaskPane(task, config.multiplexer, ctx.cwd);
     if (!updated.paneId) {
-      ctx.ui.notify(`Unable to open tmux pane for ${updated.id}.`, "error");
+      ctx.ui.notify(`Unable to open tmux pane for ${updated.id}. Try /pantheon-watch ${updated.id} for a non-tmux fallback.`, "error");
       return;
     }
     ctx.ui.notify(`Attached tmux pane ${updated.paneId} for ${updated.id}.`, "info");
@@ -2995,66 +3093,63 @@ export default function (pi: ExtensionAPI) {
     reconcileBackgroundTasks(taskDir, config.multiplexer);
     const tasks = attachAllBackgroundTaskPanes(listBackgroundTasks(taskDir), config.multiplexer, ctx.cwd);
     const active = tasks.filter((task) => task.status === "queued" || task.status === "running");
-    ctx.ui.notify(`Attached/reused panes for ${active.length} active background task${active.length === 1 ? "" : "s"}.`, "info");
+    ctx.ui.notify(active.length > 0
+      ? `Attached/reused panes for ${active.length} active background task${active.length === 1 ? "" : "s"}.`
+      : "No active background tasks to attach. Use pantheon_background to start detached work.", "info");
   }
 
   async function handlePantheonWatchCommand(args: string, ctx: ExtensionContext) {
     const config = loadPantheonConfig(ctx.cwd).config;
+    const staleAfterMs = config.background?.staleAfterMs ?? 20000;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-    reconcileBackgroundTasks(taskDir, config.multiplexer, config.background?.staleAfterMs ?? 20000);
+    reconcileBackgroundTasks(taskDir, config.multiplexer, staleAfterMs);
     let taskId = args.trim();
-    if (!taskId && ctx.hasUI) {
-      const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-      const selected = await showPantheonSelect(
+    if (!taskId) {
+      taskId = await selectBackgroundTaskId(
         ctx,
         "Watch background task",
-        tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-      );
-      if (!selected) return;
-      taskId = selected;
-    }
-    if (!taskId) {
-      ctx.ui.notify("Usage: /pantheon-watch <taskId>", "error");
-      return;
+        listBackgroundTasks(taskDir),
+        "No background tasks yet. Start one with pantheon_background or inspect /pantheon-overview.",
+        staleAfterMs,
+      ) ?? "";
+      if (!taskId) return;
     }
     const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
     if (!task) {
-      ctx.ui.notify(`No task found: ${taskId}`, "error");
+      ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
       return;
     }
-    presentPantheonCommandEditorOutput("/pantheon-watch", renderBackgroundWatch(task, 80, config.background?.staleAfterMs ?? 20000), ctx, {
-      summary: `Background watch for ${task.id}`,
+    presentPantheonCommandEditorOutput("/pantheon-watch", renderBackgroundWatch(task, 80, staleAfterMs), ctx, {
+      summary: `Live task state for ${task.id}`,
       notifyMessage: `Loaded watch view for ${task.id}.`,
+      status: task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs) ? "warning" : "success",
     });
   }
 
   async function handlePantheonResultCommand(args: string, ctx: ExtensionContext) {
     const config = loadPantheonConfig(ctx.cwd).config;
+    const staleAfterMs = config.background?.staleAfterMs ?? 20000;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
     reconcileBackgroundTasks(taskDir, config.multiplexer);
     let taskId = args.trim();
-    if (!taskId && ctx.hasUI) {
-      const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-      const selected = await showPantheonSelect(
+    if (!taskId) {
+      taskId = await selectBackgroundTaskId(
         ctx,
         "Background task result",
-        tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-      );
-      if (!selected) return;
-      taskId = selected;
-    }
-    if (!taskId) {
-      ctx.ui.notify("Usage: /pantheon-result <taskId>", "error");
-      return;
+        listBackgroundTasks(taskDir),
+        "No background tasks yet. Start one with pantheon_background or inspect /pantheon-overview.",
+        staleAfterMs,
+      ) ?? "";
+      if (!taskId) return;
     }
     const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
     if (!task) {
-      ctx.ui.notify(`No task found: ${taskId}`, "error");
+      ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
       return;
     }
-    const text = renderBackgroundResult(task, { staleAfterMs: config.background?.staleAfterMs ?? 20000 });
+    const text = renderBackgroundResult(task, { staleAfterMs });
     presentPantheonCommandEditorOutput("/pantheon-result", text, ctx, {
-      summary: `Background result for ${task.id}`,
+      summary: `Final result for ${task.id}`,
       notifyMessage: `Loaded result for ${task.id} into editor.`,
       status: task.status === "failed" || task.status === "cancelled" ? "warning" : "success",
     });
@@ -3064,7 +3159,9 @@ export default function (pi: ExtensionAPI) {
     const config = loadPantheonConfig(ctx.cwd).config;
     const state = readWorkflowState(ctx.cwd, config);
     presentPantheonCommandEditorOutput("/pantheon-todos", renderWorkflowState(state), ctx, {
-      summary: `Workflow state with ${state.uncheckedTodos.length} unchecked todo${state.uncheckedTodos.length === 1 ? "" : "s"}`,
+      summary: state.uncheckedTodos.length > 0
+        ? `${state.uncheckedTodos.length} persisted todo${state.uncheckedTodos.length === 1 ? "" : "s"} ready to resume`
+        : "No persisted todos",
       notifyMessage: `Loaded Pantheon workflow state (${state.uncheckedTodos.length} unchecked todo${state.uncheckedTodos.length === 1 ? "" : "s"}).`,
     });
     updatePantheonDashboard(ctx, config);
@@ -3077,7 +3174,7 @@ export default function (pi: ExtensionAPI) {
     const tasks = maybeStartQueuedTasks(ctx.cwd, taskDir);
     const state = readWorkflowState(ctx.cwd, config);
     presentPantheonCommandEditorOutput("/pantheon-overview", `${renderBackgroundOverview(tasks)}\n\n---\n\n${renderWorkflowState(state)}`, ctx, {
-      summary: "Pantheon workflow and background overview",
+      summary: tasks.length > 0 ? `Overview of ${tasks.length} background task${tasks.length === 1 ? "" : "s"}` : "Workflow overview with no background tasks",
       notifyMessage: "Loaded Pantheon overview into editor.",
     });
     updatePantheonDashboard(ctx, config);
@@ -3091,7 +3188,9 @@ export default function (pi: ExtensionAPI) {
     const state = readWorkflowState(ctx.cwd, config);
     const text = buildResumeContext(state, tasks);
     presentPantheonCommandEditorOutput("/pantheon-resume", text, ctx, {
-      summary: "Pantheon resume context",
+      summary: state.uncheckedTodos.length > 0
+        ? `Resume ${state.uncheckedTodos.length} todo${state.uncheckedTodos.length === 1 ? "" : "s"} with ${tasks.length} recent task${tasks.length === 1 ? "" : "s"}`
+        : `Resume from ${tasks.length} recent background task${tasks.length === 1 ? "" : "s"}`,
       notifyMessage: "Loaded Pantheon resume context into editor.",
     });
     updatePantheonDashboard(ctx, config);
@@ -3099,30 +3198,27 @@ export default function (pi: ExtensionAPI) {
 
   async function handlePantheonRetryCommand(args: string, ctx: ExtensionContext) {
     const config = loadPantheonConfig(ctx.cwd).config;
+    const staleAfterMs = config.background?.staleAfterMs ?? 20000;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
     reconcileBackgroundTasks(taskDir, config.multiplexer);
     let taskId = args.trim();
-    if (!taskId && ctx.hasUI) {
-      const tasks = listBackgroundTasks(taskDir).filter((task) => isTerminalTaskStatus(task.status)).slice(0, 20);
-      const selected = await showPantheonSelect(
+    if (!taskId) {
+      taskId = await selectBackgroundTaskId(
         ctx,
         "Retry background task",
-        tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-      );
-      if (!selected) return;
-      taskId = selected;
-    }
-    if (!taskId) {
-      ctx.ui.notify("Usage: /pantheon-retry <taskId>", "error");
-      return;
+        listBackgroundTasks(taskDir).filter((task) => isTerminalTaskStatus(task.status) || isTaskStale(task, staleAfterMs)),
+        "No retryable background tasks found. Use /pantheon-backgrounds to inspect recent work.",
+        staleAfterMs,
+      ) ?? "";
+      if (!taskId) return;
     }
     const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
     if (!task) {
-      ctx.ui.notify(`No task found: ${taskId}`, "error");
+      ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
       return;
     }
-    if (!isTerminalTaskStatus(task.status)) {
-      ctx.ui.notify(`Task ${task.id} is ${task.status}; retry is only available for terminal tasks.`, "error");
+    if (!isTerminalTaskStatus(task.status) && !isTaskStale(task, staleAfterMs)) {
+      ctx.ui.notify(`Task ${task.id} is ${task.status}; retry is available only for failed, cancelled, completed, or stale work.`, "error");
       return;
     }
     const retried = retryBackgroundTask(ctx.cwd, task, {
@@ -3131,7 +3227,7 @@ export default function (pi: ExtensionAPI) {
       onEnqueue: (taskId) => rememberBackgroundTaskId(ctx.cwd, config, taskId),
     });
     if (!retried) {
-      ctx.ui.notify(`Unable to retry ${task.id}: missing or invalid spec.`, "error");
+      ctx.ui.notify(`Unable to retry ${task.id}: missing or invalid spec. Inspect /pantheon-result ${task.id} for details.`, "error");
       return;
     }
     updatePantheonDashboard(ctx, config);
@@ -3144,39 +3240,37 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     const config = loadPantheonConfig(ctx.cwd).config;
+    const staleAfterMs = config.background?.staleAfterMs ?? 20000;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-    reconcileBackgroundTasks(taskDir, config.multiplexer, config.background?.staleAfterMs ?? 20000);
+    reconcileBackgroundTasks(taskDir, config.multiplexer, staleAfterMs);
     let taskId = args.trim();
-    if (!taskId && ctx.hasUI) {
-      const selectedTask = await showPantheonSelect(
+    if (!taskId) {
+      taskId = await selectBackgroundTaskId(
         ctx,
         "Background task actions",
-        listBackgroundTasks(taskDir).slice(0, 20).map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-      );
-      if (!selectedTask) return;
-      taskId = selectedTask;
-    }
-    if (!taskId) {
-      ctx.ui.notify("Usage: /pantheon-task-actions <taskId>", "error");
-      return;
+        listBackgroundTasks(taskDir),
+        "No background tasks yet. Start one with pantheon_background or inspect /pantheon-overview.",
+        staleAfterMs,
+      ) ?? "";
+      if (!taskId) return;
     }
     const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
     if (!task) {
-      ctx.ui.notify(`No task found: ${taskId}`, "error");
+      ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
       return;
     }
-    const action = await showPantheonSelect(ctx, `Task ${task.id} actions`, [
-      { value: "watch", label: "Open watch view", description: "Post metadata, heartbeat, and recent logs to chat." },
-      { value: "result", label: "Open result", description: "Post the final result summary to chat." },
-      { value: "log", label: "Open log tail", description: "Post recent task logs to chat." },
+    const action = await showPantheonSelect(ctx, `Background task actions · ${task.id} · ${task.agent}`, [
+      { value: "watch", label: "Inspect · /pantheon-watch", description: "Live state, heartbeat, and recent log tail." },
+      { value: "result", label: "Inspect · /pantheon-result", description: "Final summary and next recovery actions." },
+      { value: "log", label: "Inspect · /pantheon-log", description: "Raw recent log output." },
       ...(task.status === "queued" || task.status === "running"
-        ? [{ value: "cancel", label: "Cancel task", description: "Cancel the active background task." }]
+        ? [{ value: "cancel", label: "Recover · /pantheon-cancel", description: "Cancel the active background task." }]
         : []),
       ...(task.status === "queued" || task.status === "running"
-        ? [{ value: "attach", label: "Attach pane", description: "Open or reuse a tmux pane for the task log." }]
+        ? [{ value: "attach", label: "Inspect · /pantheon-attach", description: "Open or reuse a tmux pane for live logs." }]
         : []),
-      ...(isTerminalTaskStatus(task.status) || isTaskStale(task, config.background?.staleAfterMs ?? 20000)
-        ? [{ value: "retry", label: "Retry task", description: "Requeue the task from its saved spec." }]
+      ...(isTerminalTaskStatus(task.status) || isTaskStale(task, staleAfterMs)
+        ? [{ value: "retry", label: "Recover · /pantheon-retry", description: "Requeue the task from its saved spec." }]
         : []),
     ]);
     if (!action) return;
@@ -3191,7 +3285,7 @@ export default function (pi: ExtensionAPI) {
     if (action === "log") {
       const logText = tailLog(task.logPath);
       presentPantheonCommandEditorOutput("/pantheon-log", logText, ctx, {
-        summary: `Log tail for ${task.id}`,
+        summary: `Recent log for ${task.id}`,
         notifyMessage: `Loaded log tail for ${task.id} into editor.`,
       });
       return;
@@ -3386,31 +3480,42 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const action = await showPantheonSelect(ctx, "Pantheon Command Center", [
-        { value: "delegate", label: "Delegate to specialist", description: "Route focused work to Explorer, Librarian, Oracle, Designer, or Fixer." },
-        { value: "council", label: "Ask council", description: "Get multiple perspectives and a synthesized recommendation." },
-        { value: "resume", label: "Resume prior work", description: "Build a re-entry brief from persisted todos and recent background tasks." },
-        { value: "overview", label: "Open overview", description: "See workflow state and background task activity together." },
-        { value: "attach", label: "Attach background task pane", description: "Open or reopen a tmux pane for a running task log." },
-        { value: "attach-all", label: "Attach all running panes", description: "Open or reuse panes for all queued/running background tasks in the shared tmux window." },
-        { value: "result", label: "Inspect background result", description: "Open the latest result summary for a detached task." },
-        { value: "watch", label: "Watch background task", description: "Open heartbeat/session metadata plus a recent log tail for a detached task." },
-        { value: "task-actions", label: "Background task actions", description: "Choose retry, cancel, attach, log, watch, or result actions from one task menu." },
-        { value: "todos", label: "Inspect persisted todos", description: "Review carried-over unchecked tasks from prior work." },
-        { value: "retry", label: "Retry background task", description: "Requeue a completed, failed, or cancelled detached task." },
-        { value: "spec-studio", label: "Spec studio", description: "Open an editor-first spec template for feature/refactor/investigation work." },
-        { value: "bootstrap", label: "Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
-        { value: "debug", label: "Inspect debug trace", description: "Open recent foreground delegation/council traces and inspect why they failed." },
-        { value: "subagents", label: "Subagent activity", description: "Inspect live/recent delegate or council subagent details and jump to full traces." },
-        { value: "agents", label: "List agents", description: "Show bundled and override Pantheon specialists." },
-        { value: "skills", label: "Skills setup", description: "Show skill policy guidance, bundled cartography workflow notes, and a starter config snippet." },
-        { value: "stats", label: "Stats", description: "Inspect Pantheon usage and reliability statistics." },
-        { value: "version", label: "Package version", description: "Inspect the installed package version and cached update information." },
-        { value: "update-check", label: "Refresh update check", description: "Force a fresh check for the latest published package version." },
-        { value: "hooks", label: "Hook trace", description: "Inspect Pantheon orchestration middleware ordering and restored trace state." },
-        { value: "adapter-health", label: "Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
-        { value: "doctor", label: "Doctor", description: "Run a broader Pantheon health check across config, adapters, tmux, and background storage." },
-        { value: "warnings", label: "Show config warnings", description: "Inspect config validation warnings and active presets." },
+      const configResult = loadPantheonConfig(ctx.cwd);
+      const taskDir = ensureDir(configResult.config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
+      const tasks = reconcileBackgroundTasks(taskDir, configResult.config.multiplexer, configResult.config.background?.staleAfterMs ?? 20000);
+      const workflowState = readWorkflowState(ctx.cwd, configResult.config);
+      const staleAfterMs = configResult.config.background?.staleAfterMs ?? 20000;
+      const failedTask = tasks.find((task) => task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs));
+      const activeTask = tasks.find((task) => task.status === "queued" || task.status === "running");
+      const action = await showPantheonSelect(ctx, "Pantheon — choose next move", [
+        ...(failedTask ? [{ value: "task-actions", label: "Recommended · Recover failed background task", description: `${failedTask.id} — /pantheon-task-actions ${failedTask.id}` }] : []),
+        ...(activeTask ? [{ value: "watch", label: "Recommended · Watch active background task", description: `${activeTask.id} — /pantheon-watch ${activeTask.id}` }] : []),
+        ...(workflowState.uncheckedTodos.length > 0 ? [{ value: "resume", label: "Recommended · Resume prior work", description: `${workflowState.uncheckedTodos.length} persisted todo${workflowState.uncheckedTodos.length === 1 ? "" : "s"} — /pantheon-resume` }] : []),
+        ...(configResult.warnings.length > 0 ? [{ value: "warnings", label: "Recommended · Review config warnings", description: `${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"} — /pantheon-config` }] : []),
+        { value: "delegate", label: "Start work · Delegate to specialist", description: "Route focused work to Explorer, Librarian, Oracle, Designer, or Fixer." },
+        { value: "council", label: "Start work · Ask council", description: "Get multiple perspectives and a synthesized recommendation." },
+        { value: "spec-studio", label: "Start work · Open spec studio", description: "Create an editor-first brief for feature, refactor, investigation, or incident work." },
+        { value: "resume", label: "Start work · Resume prior work", description: "Build a re-entry brief from persisted todos and recent background tasks." },
+        { value: "overview", label: "Inspect · View workflow overview", description: "See workflow state and background task activity together." },
+        { value: "task-actions", label: "Inspect · Background task actions", description: "Choose watch, result, log, attach, cancel, or retry from one task menu." },
+        { value: "watch", label: "Inspect · /pantheon-watch", description: "Open live metadata plus a recent log tail for a detached task." },
+        { value: "result", label: "Inspect · /pantheon-result", description: "Open the latest result summary for a detached task." },
+        { value: "attach", label: "Inspect · /pantheon-attach", description: "Open or reopen a tmux pane for a running task log." },
+        { value: "attach-all", label: "Inspect · /pantheon-attach-all", description: "Open or reuse panes for all queued/running background tasks." },
+        { value: "todos", label: "Inspect · /pantheon-todos", description: "Review carried-over unchecked tasks from prior work." },
+        { value: "subagents", label: "Inspect · Subagent activity", description: "Inspect live/recent delegate or council subagent details and jump to full traces." },
+        { value: "debug", label: "Recover · Inspect debug trace", description: "Open recent foreground delegation/council traces and inspect why they failed." },
+        { value: "retry", label: "Recover · /pantheon-retry", description: "Requeue completed, failed, cancelled, or stale detached work." },
+        { value: "doctor", label: "Recover · Run doctor", description: "Check config, adapters, tmux, and background storage health." },
+        { value: "warnings", label: "Setup · Review config warnings", description: "Inspect config validation warnings and active presets." },
+        { value: "bootstrap", label: "Setup · Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
+        { value: "agents", label: "Setup · List agents", description: "Show bundled and override Pantheon specialists." },
+        { value: "skills", label: "Setup · Skills guidance", description: "Show skill policy guidance and a starter config snippet." },
+        { value: "adapter-health", label: "Setup · Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
+        { value: "stats", label: "Inspect · Stats", description: "Inspect Pantheon usage and reliability statistics." },
+        { value: "version", label: "Inspect · Package version", description: "Inspect the installed package version and cached update information." },
+        { value: "update-check", label: "Inspect · Refresh update check", description: "Force a fresh check for the latest published package version." },
+        { value: "hooks", label: "Inspect · Hook trace", description: "Inspect Pantheon orchestration middleware ordering and restored trace state." },
       ]);
       if (!action) return;
 
@@ -3473,10 +3578,14 @@ export default function (pi: ExtensionAPI) {
 
       if (action === "warnings") {
         const configResult = loadPantheonConfig(ctx.cwd);
-        ctx.ui.notify(
-          configResult.warnings.length > 0 ? configResult.warnings.join("\n") : "No config warnings.",
-          configResult.warnings.length > 0 ? "warning" : "info",
-        );
+        latestConfig = configResult.config;
+        latestWarningCount = configResult.warnings.length;
+        updatePantheonDashboard(ctx, configResult.config);
+        presentPantheonCommandEditorOutput("/pantheon-config", buildConfigReport(configResult), ctx, {
+          summary: configResult.warnings.length > 0 ? `Config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}` : "Config report",
+          notifyMessage: configResult.warnings.length > 0 ? `Loaded config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}.` : "Loaded config report into editor.",
+          status: configResult.warnings.length > 0 ? "warning" : "success",
+        });
         return;
       }
 
@@ -3688,41 +3797,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("pantheon-attach", {
     description: "Open a tmux pane for a Pantheon background task log",
-    handler: async (args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      let taskId = args.trim();
-      if (!taskId && ctx.hasUI) {
-        const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-        const selected = await showPantheonSelect(
-          ctx,
-          "Attach background task pane",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-        );
-        if (!selected) return;
-        taskId = selected;
-      }
-      if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-attach <taskId>", "error");
-        return;
-      }
-      const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
-      if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
-        return;
-      }
-      if (!process.env.TMUX || !config.multiplexer?.tmux) {
-        ctx.ui.notify("tmux attach requires running inside tmux with multiplexer.tmux enabled.", "error");
-        return;
-      }
-      const updated = attachBackgroundTaskPane(task, config.multiplexer, ctx.cwd);
-      if (!updated.paneId) {
-        ctx.ui.notify(`Unable to open tmux pane for ${updated.id}.`, "error");
-        return;
-      }
-      ctx.ui.notify(`Attached tmux pane ${updated.paneId} for ${updated.id}.`, "info");
-    },
+    handler: handlePantheonAttachCommand,
   });
 
   pi.registerCommand("pantheon-attach-all", {
@@ -3760,21 +3835,25 @@ export default function (pi: ExtensionAPI) {
       let taskId = args.trim();
       if (!taskId && ctx.hasUI) {
         const tasks = listBackgroundTasks(taskDir).filter((task) => task.status === "queued" || task.status === "running");
+        if (tasks.length === 0) {
+          ctx.ui.notify("No active background tasks to cancel. Use /pantheon-backgrounds to inspect recent work.", "info");
+          return;
+        }
         const selected = await showPantheonSelect(
           ctx,
           "Cancel background task",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
+          buildBackgroundTaskSelectItems(tasks, config.background?.staleAfterMs ?? 20000),
         );
         if (!selected) return;
         taskId = selected;
       }
       if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-cancel <taskId>", "error");
+        ctx.ui.notify("Usage: /pantheon-cancel <taskId>. Use /pantheon-backgrounds to inspect recent ids.", "error");
         return;
       }
       const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
       if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
+        ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
         return;
       }
       const updated = cancelBackgroundTask(task, config.multiplexer);
@@ -3790,26 +3869,30 @@ export default function (pi: ExtensionAPI) {
       reconcileBackgroundTasks(taskDir, config.multiplexer);
       let taskId = args.trim();
       if (!taskId && ctx.hasUI) {
-        const tasks = listBackgroundTasks(taskDir).slice(0, 20);
+        const tasks = listBackgroundTasks(taskDir);
+        if (tasks.length === 0) {
+          ctx.ui.notify("No background tasks yet. Start one with pantheon_background or inspect /pantheon-overview.", "info");
+          return;
+        }
         const selected = await showPantheonSelect(
           ctx,
           "Background task log",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
+          buildBackgroundTaskSelectItems(tasks, config.background?.staleAfterMs ?? 20000),
         );
         if (!selected) return;
         taskId = selected;
       }
       if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-log <taskId>", "error");
+        ctx.ui.notify("Usage: /pantheon-log <taskId>. Use /pantheon-backgrounds to inspect recent ids.", "error");
         return;
       }
       const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
       if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
+        ctx.ui.notify(`No task found: ${taskId}. Use /pantheon-backgrounds to inspect recent ids.`, "error");
         return;
       }
       presentPantheonCommandEditorOutput("/pantheon-log", tailLog(task.logPath), ctx, {
-        summary: `Log tail for ${task.id}`,
+        summary: `Recent log for ${task.id}`,
         notifyMessage: `Loaded log tail for ${task.id} into editor.`,
       });
     },
@@ -3822,116 +3905,27 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("pantheon-watch", {
     description: "Show live background task metadata and a recent log tail together",
-    handler: async (args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer, config.background?.staleAfterMs ?? 20000);
-      let taskId = args.trim();
-      if (!taskId && ctx.hasUI) {
-        const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-        const selected = await showPantheonSelect(
-          ctx,
-          "Watch background task",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-        );
-        if (!selected) return;
-        taskId = selected;
-      }
-      if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-watch <taskId>", "error");
-        return;
-      }
-      const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
-      if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
-        return;
-      }
-      presentPantheonCommandEditorOutput("/pantheon-watch", renderBackgroundWatch(task, 80, config.background?.staleAfterMs ?? 20000), ctx, {
-        summary: `Background watch for ${task.id}`,
-        notifyMessage: `Loaded watch view for ${task.id}.`,
-      });
-    },
+    handler: handlePantheonWatchCommand,
   });
 
   pi.registerCommand("pantheon-result", {
     description: "Show the final result for a background task",
-    handler: async (args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      let taskId = args.trim();
-      if (!taskId && ctx.hasUI) {
-        const tasks = listBackgroundTasks(taskDir).slice(0, 20);
-        const selected = await showPantheonSelect(
-          ctx,
-          "Background task result",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-        );
-        if (!selected) return;
-        taskId = selected;
-      }
-      if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-result <taskId>", "error");
-        return;
-      }
-      const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
-      if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
-        return;
-      }
-      const text = renderBackgroundResult(task, { staleAfterMs: config.background?.staleAfterMs ?? 20000 });
-      presentPantheonCommandEditorOutput("/pantheon-result", text, ctx, {
-        summary: `Background result for ${task.id}`,
-        notifyMessage: `Loaded result for ${task.id} into editor.`,
-        status: task.status === "failed" || task.status === "cancelled" ? "warning" : "success",
-      });
-    },
+    handler: handlePantheonResultCommand,
   });
 
   pi.registerCommand("pantheon-todos", {
     description: "Show persisted Pantheon workflow todos",
-    handler: async (_args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const state = readWorkflowState(ctx.cwd, config);
-      presentPantheonCommandEditorOutput("/pantheon-todos", renderWorkflowState(state), ctx, {
-        summary: `Workflow state with ${state.uncheckedTodos.length} unchecked todo${state.uncheckedTodos.length === 1 ? "" : "s"}`,
-        notifyMessage: `Loaded Pantheon workflow state (${state.uncheckedTodos.length} unchecked todo${state.uncheckedTodos.length === 1 ? "" : "s"}).`,
-      });
-      updatePantheonDashboard(ctx, config);
-    },
+    handler: handlePantheonTodosCommand,
   });
 
   pi.registerCommand("pantheon-overview", {
     description: "Show combined Pantheon workflow and background overview",
-    handler: async (_args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      const tasks = maybeStartQueuedTasks(ctx.cwd, taskDir);
-      const state = readWorkflowState(ctx.cwd, config);
-      presentPantheonCommandEditorOutput("/pantheon-overview", `${renderBackgroundOverview(tasks)}\n\n---\n\n${renderWorkflowState(state)}`, ctx, {
-        summary: "Pantheon workflow and background overview",
-        notifyMessage: "Loaded Pantheon overview into editor.",
-      });
-      updatePantheonDashboard(ctx, config);
-    },
+    handler: handlePantheonOverviewCommand,
   });
 
   pi.registerCommand("pantheon-resume", {
     description: "Show a resume brief from persisted workflow state and recent background tasks",
-    handler: async (_args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      const tasks = listBackgroundTasks(taskDir);
-      const state = readWorkflowState(ctx.cwd, config);
-      const text = buildResumeContext(state, tasks);
-      presentPantheonCommandEditorOutput("/pantheon-resume", text, ctx, {
-        summary: "Pantheon resume context",
-        notifyMessage: "Loaded Pantheon resume context into editor.",
-      });
-      updatePantheonDashboard(ctx, config);
-    },
+    handler: handlePantheonResumeCommand,
   });
 
   pi.registerCommand("pantheon-clear-todos", {
@@ -3946,46 +3940,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("pantheon-retry", {
     description: "Retry a Pantheon background task with the same spec",
-    handler: async (args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
-      reconcileBackgroundTasks(taskDir, config.multiplexer);
-      let taskId = args.trim();
-      if (!taskId && ctx.hasUI) {
-        const tasks = listBackgroundTasks(taskDir).filter((task) => isTerminalTaskStatus(task.status)).slice(0, 20);
-        const selected = await showPantheonSelect(
-          ctx,
-          "Retry background task",
-          tasks.map((task) => ({ value: task.id, label: `${task.id} · ${task.agent}`, description: `${task.status} — ${previewText(task.task, 90)}` })),
-        );
-        if (!selected) return;
-        taskId = selected;
-      }
-      if (!taskId) {
-        ctx.ui.notify("Usage: /pantheon-retry <taskId>", "error");
-        return;
-      }
-      const task = listBackgroundTasks(taskDir).find((item) => item.id === taskId);
-      if (!task) {
-        ctx.ui.notify(`No task found: ${taskId}`, "error");
-        return;
-      }
-      if (!isTerminalTaskStatus(task.status)) {
-        ctx.ui.notify(`Task ${task.id} is ${task.status}; retry is only available for terminal tasks.`, "error");
-        return;
-      }
-      const retried = retryBackgroundTask(ctx.cwd, task, {
-        taskDir,
-        randomId,
-        onEnqueue: (taskId) => rememberBackgroundTaskId(ctx.cwd, config, taskId),
-      });
-      if (!retried) {
-        ctx.ui.notify(`Unable to retry ${task.id}: missing or invalid spec.`, "error");
-        return;
-      }
-      updatePantheonDashboard(ctx, config);
-      ctx.ui.notify(`Retried ${task.id} as ${retried.id}.`, "info");
-    },
+    handler: handlePantheonRetryCommand,
   });
 
   pi.registerCommand("pantheon-cleanup", {

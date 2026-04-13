@@ -392,7 +392,7 @@ test("pantheon-debug still posts direct trace inspection through command chat ou
       },
     });
 
-    assert.equal(editorText, "");
+    assert.match(editorText, /Command: \/pantheon-debug/);
     assert.equal(commandMessages.length, 1);
     assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-debug/);
     assert.match(commandMessages[0]?.content ?? "", /Trace:/);

@@ -1,47 +1,58 @@
 # Pantheon Workflows Guide
 
-This guide explains how to choose between the major Pantheon workflows in the pi port and how to recover when something goes wrong.
+This guide explains how to choose the right Pantheon workflow, where results appear, and how to recover when something goes wrong.
 
-## Choose the right workflow
+## Start from the user intent
 
-### Use `pantheon_delegate` when
+### I want to investigate or implement something bounded
 
+Use `pantheon_delegate` when:
 - one specialist is enough
-- the task is bounded and clear
-- you want parallel specialists or a scout → plan → implement chain
+- the task is clear
+- you want a scout → plan → implement chain or a few parallel specialists
 
-Good examples:
+Good fits:
 - repo reconnaissance
 - architecture review
 - focused implementation
 - documentation lookup through `librarian`
 
-### Use `pantheon_council` when
+### I want a high-confidence decision
 
+Use `pantheon_council` when:
 - the decision is high-impact
 - trade-offs are ambiguous
 - you want multiple perspectives before acting
 
-Good examples:
+Good fits:
 - architecture choices
 - migration plans
 - risky refactors
-- disagreement between implementation options
+- disagreements between implementation options
 
-### Use `pantheon_background` when
+### I want work to continue while I keep moving
 
+Use `pantheon_background` when:
 - the work should continue detached from the foreground
 - you want to keep moving while a specialist runs
 - the task may take long enough that live inspection or retry matters
 
-Good examples:
+Good fits:
 - broad investigations
 - long-running code changes
 - review passes you may want to inspect later
 
+### I am resuming or recovering work
+
+Start with:
+- `/pantheon` → recommended actions
+- `/pantheon-overview` → workflow + background state together
+- `/pantheon-task-actions <taskId>` → one menu for watch/result/log/retry/attach/cancel
+- `/pantheon-resume` → persisted todos + recent background context
+
 ---
 
-## Inspecting results
+## Where results appear
 
 ### Foreground command results
 
@@ -52,12 +63,16 @@ Commands like:
 - `/pantheon-adapters`
 - `/pantheon-result`
 
-now load a labeled editor report and show a prominent command-output widget.
+now use three consistent surfaces:
 
-Long-running delegate and council commands also stream partial UI updates while work is still in progress, then replace those partial reports with the final result.
+- **editor report** — full structured output
+- **chat report** — labeled command result in the conversation timeline
+- **command widget** — compact status + summary below the editor
+
+Long-running delegate and council commands stream **running** widget updates while work is still in progress, then replace those partial summaries with the final result.
 
 Use the editor report when you need the full output.
-Use the widget/banner when you only need quick confirmation of what command produced the output and whether it succeeded.
+Use the widget when you only need quick confirmation of what command ran and what to do next.
 
 ### Subagent activity
 
@@ -72,13 +87,19 @@ This is the best place to inspect:
 ### Background tasks
 
 Use:
-- `/pantheon-backgrounds` — overview
-- `/pantheon-watch <taskId>` — metadata + heartbeat + log tail
-- `/pantheon-result <taskId>` — final result summary
-- `/pantheon-log <taskId>` — raw log tail
+- `/pantheon-task-actions <taskId>` — best first stop; one menu for retry/cancel/log/result/watch/attach
+- `/pantheon-backgrounds` — overview of recent work
+- `/pantheon-watch <taskId>` — live state, heartbeat, and recent log tail
+- `/pantheon-result <taskId>` — final summary plus next recovery actions
+- `/pantheon-log <taskId>` — raw recent log output
 - `/pantheon-attach <taskId>` — live tmux pane
-- `/pantheon-retry <taskId>` — rerun terminal tasks
-- `/pantheon-task-actions <taskId>` — interactive action menu for retry/cancel/log/result/watch/attach
+- `/pantheon-retry <taskId>` — rerun terminal or stale tasks
+
+Mental model:
+- **watch** = what is happening right now
+- **result** = what happened and what to do next
+- **log** = raw output when you need detail
+- **task-actions** = interactive recovery/inspection shortcut
 
 ### Code review helper
 

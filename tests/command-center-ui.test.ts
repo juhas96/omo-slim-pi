@@ -203,16 +203,16 @@ test("pantheon council command executes natively without injecting prompt text i
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.equal(editorWrites.length, 0);
+    assert.equal(editorWrites.length, 1);
+    assert.match(editorWrites[0] ?? "", /Command: \/pantheon-council/);
     assert.equal(commandMessages.length, 1);
     assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
     assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-council/);
     assert.match(commandMessages[0]?.content ?? "", /Council preset: quick/);
     assert.equal(commandMessages[0]?.details?.status, "success");
     assert.ok(widgetWrites.length > 0);
-    assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /PANTHEON COMMAND OUTPUT/);
-    assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /SUCCESS/);
     assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-council/);
+    assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /✓ ready/);
   } finally {
     process.argv[1] = originalArgv1;
   }
@@ -266,7 +266,7 @@ test("pantheon-as executes delegate natively without injecting prompt text into 
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.equal(editorWrites.length, 0);
+    assert.equal(editorWrites.length, 1);
     assert.equal(commandMessages.length, 1);
     assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
     assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-as/);
@@ -310,18 +310,18 @@ test("pantheon-runtime presents labeled command output in chat and the widget", 
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-runtime/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon command output/);
   assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-runtime/);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon runtime report/);
   assert.ok(widgetWrites.length > 0);
-  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /PANTHEON COMMAND OUTPUT/);
-  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /SUCCESS/);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-runtime/);
+  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /✓ ready/);
 });
 
-test("pantheon-config opens a structured config report in chat instead of the editor", async () => {
+test("pantheon-config opens a structured config report in chat and the editor", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-config-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -356,7 +356,8 @@ test("pantheon-config opens a structured config report in chat instead of the ed
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-config/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-config/);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon config report/);
@@ -396,7 +397,8 @@ test("pantheon-adapters opens an adapter policy report in chat", async () => {
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-adapters/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-adapters/);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon adapter policy/);
@@ -438,7 +440,8 @@ test("pantheon-doctor opens a structured health report in chat", async () => {
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-doctor/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-doctor/);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon doctor report/);
@@ -506,7 +509,8 @@ test("pantheon-task-actions routes task actions through an interactive menu", as
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-result/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-result/);
   assert.match(commandMessages[0]?.content ?? "", /all done/);
@@ -573,11 +577,12 @@ test("pantheon-as streams partial command output in widgets before posting the f
     });
 
     assert.equal(sentMessages.length, 0);
-    assert.equal(editorWrites.length, 0);
+    assert.equal(editorWrites.length, 1);
+    assert.match(editorWrites[0] ?? "", /Command: \/pantheon-as/);
     assert.equal(commandMessages.length, 1);
     assert.equal(commandMessages[0]?.details?.status, "success");
     assert.match(commandMessages[0]?.content ?? "", /final:/i);
-    assert.ok(widgetWrites.some((lines) => /WARNING/.test(lines.join("\n")) && /partial:/i.test(lines.join("\n"))));
+    assert.ok(widgetWrites.some((lines) => /… running/.test(lines.join("\n")) && /partial:/i.test(lines.join("\n"))));
   } finally {
     process.argv[1] = originalArgv1;
   }

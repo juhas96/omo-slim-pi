@@ -51,12 +51,53 @@ Open `pi` in the target project, then run:
 
 ```text
 /pantheon
-/pantheon-agents
 /pantheon-config
 /pantheon-runtime
 ```
 
 If those commands resolve, the extension is loaded and the Pantheon surface is available.
+
+### 🚀 Start here in 3 minutes
+
+Use Pantheon from the outside in:
+
+1. **Open the launcher**
+   ```text
+   /pantheon
+   ```
+   The command center is organized around **Start work**, **Inspect**, **Recover**, and **Setup** flows.
+
+2. **Try one bounded task**
+   - choose **Start work · Delegate to specialist**
+   - ask Explorer or Fixer a small, concrete question
+
+3. **Inspect the result**
+   - Pantheon now writes a structured report into the editor
+   - it also posts the same result to chat and keeps a compact widget below the editor
+
+4. **Try one background workflow**
+   - start detached work with `pantheon_background`
+   - use `/pantheon-watch`, `/pantheon-result`, or `/pantheon-task-actions` to inspect and recover it
+
+### 👀 What you'll see in the TUI
+
+Pantheon uses a few consistent surfaces:
+
+- **Command widget** — short result/status line below the editor
+- **Editor report** — full command output for inspection and copy/paste
+- **Chat report** — labeled command result in the conversation timeline
+- **Dashboard widget** — the current next-best action, active work, and warnings
+- **Subagent widget** — live delegate/council activity while specialists run
+
+### Helpful first actions
+
+```text
+/pantheon                 # intent-driven command center
+/pantheon-runtime         # runtime and parity status
+/pantheon-config          # merged config plus warnings
+/pantheon-overview        # workflow + background overview
+/pantheon-task-actions    # inspect/retry/cancel/attach from one task menu
+```
 
 ### Detailed guides
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
-test("pantheon-version command renders a package version report in chat without prefilling the editor", async () => {
+test("pantheon-version command renders a package version report in chat and the editor", async () => {
   const commands = new Map<string, any>();
   const sentMessages: string[] = [];
   const commandMessages: Array<{ content?: string; details?: any }> = [];
@@ -42,7 +42,7 @@ test("pantheon-version command renders a package version report in chat without 
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorText, "");
+  assert.match(editorText, /Command: \/pantheon-version/);
   assert.equal(commandMessages.length, 1);
   assert.match(commandMessages[0]?.content ?? "", /Pantheon package version report/);
   assert.match(commandMessages[0]?.content ?? "", /Current version:/);

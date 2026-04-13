@@ -37,6 +37,11 @@
         }
       }
     },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable or disable the oh-my-opencode-pi extension for the current config scope. Re-enable by setting this back to true and starting a new session."
+    },
     "appendOrchestratorPrompt": {
       "type": "boolean",
       "default": true,

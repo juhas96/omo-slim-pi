@@ -29,6 +29,7 @@ export function buildConfigReport(result: PantheonConfigLoadResult): string {
     `- Council presets: ${formatList(councilPresets.length > 0 ? councilPresets : ["default", "quick", "balanced", "review-board"])}`,
     "",
     "Workflow & UI:",
+    `- Extension: ${formatBoolean(config.enabled)}`,
     `- Dashboard widget: ${formatBoolean(config.ui?.dashboardWidget)}`,
     `- Workflow hints: ${formatBoolean(config.workflow?.injectHints)}`,
     `- Persist todos: ${formatBoolean(config.workflow?.persistTodos)}`,

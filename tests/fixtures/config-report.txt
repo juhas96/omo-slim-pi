@@ -10,6 +10,7 @@ Presets:
 - Council presets: default
 
 Workflow & UI:
+- Extension: enabled
 - Dashboard widget: enabled
 - Workflow hints: enabled
 - Persist todos: enabled

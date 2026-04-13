@@ -97,6 +97,36 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
   }
 });
 
+test("project config can re-enable Pantheon after a global disable", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-config-reenable-"));
+  const agentDir = path.join(tempRoot, "agent");
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
+
+  fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.jsonc"), `{
+    "enabled": false,
+    "background": { "enabled": false }
+  }`);
+  fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), `{
+    "enabled": true,
+    "background": { "enabled": true }
+  }`);
+
+  const previous = process.env[AGENT_DIR_ENV];
+  process.env[AGENT_DIR_ENV] = agentDir;
+  try {
+    const result = loadPantheonConfig(projectDir);
+    assert.equal(result.config.enabled, true);
+    assert.equal(result.config.background?.enabled, true);
+    assert.equal(result.warnings.length, 0);
+    assert.equal(result.diagnostics.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env[AGENT_DIR_ENV];
+    else process.env[AGENT_DIR_ENV] = previous;
+  }
+});
+
 test("loadPantheonConfig surfaces schema and lint diagnostics for invalid config entries", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-config-invalid-"));
   const agentDir = path.join(tempRoot, "agent");

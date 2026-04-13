@@ -107,16 +107,60 @@ function deriveTaskDuration(task: BackgroundTaskRecord, now = Date.now()): numbe
   return undefined;
 }
 
+function formatTaskHeading(task: BackgroundTaskRecord, staleAfterMs = 20000): string {
+  const state = isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status;
+  return `${task.id} • ${state} • ${task.agent} • ${formatDuration(deriveTaskDuration(task))}`;
+}
+
+function summarizeTaskState(task: BackgroundTaskRecord): string {
+  const resultText = summarizeSingleResult(task.result);
+  if (task.summary?.trim()) return task.summary.trim();
+  return resultText;
+}
+
+function summarizeTaskDetail(task: BackgroundTaskRecord): string | undefined {
+  const resultText = summarizeSingleResult(task.result);
+  if (!resultText || resultText === "(no output)") return undefined;
+  if (task.summary?.trim() && task.summary.trim() === resultText.trim()) return undefined;
+  return resultText.trim();
+}
+
+function buildBackgroundDetails(task: BackgroundTaskRecord): string[] {
+  return [
+    `Task: ${task.task}`,
+    task.sessionKey ? `Session key: ${task.sessionKey}` : undefined,
+    `Created: ${new Date(task.createdAt).toISOString()}`,
+    task.startedAt ? `Started: ${new Date(task.startedAt).toISOString()}` : undefined,
+    task.finishedAt ? `Finished: ${new Date(task.finishedAt).toISOString()}` : undefined,
+    `Heartbeat: ${formatAge(task.heartbeatAt)}`,
+    `Watched: ${task.watchCount ?? 0}`,
+    task.reusedFrom ? `Reused from: ${task.reusedFrom}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+}
+
 export function buildBackgroundNextSteps(task: BackgroundTaskRecord, staleAfterMs = 20000): string[] {
-  const lines = [
-    `- Open action menu: /pantheon-task-actions ${task.id}`,
-    `- Inspect result: /pantheon-result ${task.id}`,
-    `- Inspect watch view: /pantheon-watch ${task.id}`,
-    `- Inspect log tail: /pantheon-log ${task.id}`,
+  const stale = isTaskStale(task, staleAfterMs);
+  if (task.status === "queued" || task.status === "running") {
+    return [
+      `- /pantheon-watch ${task.id}`,
+      `- /pantheon-log ${task.id}`,
+      ...(process.env.TMUX ? [`- /pantheon-attach ${task.id}`] : []),
+      `- /pantheon-task-actions ${task.id}`,
+    ];
+  }
+  if (task.status === "failed" || task.status === "cancelled" || stale) {
+    return [
+      `- /pantheon-result ${task.id}`,
+      `- /pantheon-log ${task.id}`,
+      `- /pantheon-retry ${task.id}`,
+      `- /pantheon-task-actions ${task.id}`,
+    ];
+  }
+  return [
+    `- /pantheon-result ${task.id}`,
+    `- /pantheon-log ${task.id}`,
+    `- /pantheon-task-actions ${task.id}`,
   ];
-  if (task.status === "queued" || task.status === "running") lines.push(`- Attach live pane: /pantheon-attach ${task.id}`);
-  if (task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs)) lines.push(`- Retry task: /pantheon-retry ${task.id}`);
-  return lines;
 }
 
 export function renderBackgroundOverview(tasks: BackgroundTaskRecord[], maxRecent = 8, staleAfterMs = 20000): string {
@@ -128,20 +172,38 @@ export function renderBackgroundOverview(tasks: BackgroundTaskRecord[], maxRecen
   const recent = tasks.slice(0, Math.max(1, maxRecent));
   const terminal = completed.length + failed.length;
   const completionRate = terminal > 0 ? `${Math.round((completed.length / terminal) * 100)}%` : "n/a";
+  const attentionTask = tasks.find((task) => task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs));
+  const activeTask = tasks.find((task) => task.status === "queued" || task.status === "running");
+
+  if (tasks.length === 0) {
+    return [
+      "Pantheon background: idle",
+      "",
+      "No background tasks yet.",
+      "Suggested next steps:",
+      "- Start detached work with pantheon_background",
+      "- Use /pantheon for the interactive launcher",
+    ].join("\n");
+  }
 
   return [
-    summarizeBackgroundCounts(tasks, staleAfterMs),
-    `\nQueued: ${queued.length}`,
+    attentionTask
+      ? `Pantheon background: attention needed — ${attentionTask.id}`
+      : activeTask
+        ? `Pantheon background: active — ${activeTask.id}`
+        : summarizeBackgroundCounts(tasks, staleAfterMs),
+    `Queued: ${queued.length}`,
     `Running: ${running.length}`,
     `Completed: ${completed.length}`,
     `Failed/Cancelled: ${failed.length}`,
     `Stale: ${stale.length}`,
     `Completion rate: ${completionRate}`,
-    recent.length > 0 ? `\nRecent tasks:\n${recent.map((task) => `- ${describeBackgroundTask(task, 120, staleAfterMs)}${deriveTaskDuration(task) != null ? ` (${formatDuration(deriveTaskDuration(task))})` : ""}`).join("\n")}` : undefined,
-    failed.length > 0 || stale.length > 0
-      ? `\nSuggested next steps:\n- Inspect failed or stale work with /pantheon-result <taskId> or /pantheon-watch <taskId>\n- Retry terminal failures with /pantheon-retry <taskId>`
-      : running.length > 0
-        ? `\nSuggested next steps:\n- Use /pantheon-watch <taskId> for live metadata and logs\n- Use /pantheon-attach <taskId> to follow a live pane in tmux`
+    attentionTask ? `\nNow:\n- ${formatTaskHeading(attentionTask, staleAfterMs)}\n- ${summarizeTaskState(attentionTask)}` : undefined,
+    recent.length > 0 ? `\nRecent tasks:\n${recent.map((task) => `- ${formatTaskHeading(task, staleAfterMs)} — ${previewText(task.summary ?? task.task, 100)}`).join("\n")}` : undefined,
+    attentionTask
+      ? `\nSuggested next steps:\n${buildBackgroundNextSteps(attentionTask, staleAfterMs).join("\n")}`
+      : activeTask
+        ? `\nSuggested next steps:\n${buildBackgroundNextSteps(activeTask, staleAfterMs).join("\n")}`
         : undefined,
   ].filter((item): item is string => Boolean(item)).join("\n");
 }
@@ -192,39 +254,39 @@ function formatAge(timestamp: number | undefined, now = Date.now()): string {
 }
 
 export function renderBackgroundWatch(task: BackgroundTaskRecord, maxLines = 80, staleAfterMs = 20000): string {
-  const stale = isTaskStale(task, staleAfterMs);
   return [
-    `${task.id} [${stale ? `${task.status}/stale` : task.status}] ${task.agent}`,
-    `Task: ${task.task}`,
-    task.summary ? `Summary: ${task.summary}` : undefined,
-    task.sessionKey ? `Session key: ${task.sessionKey}` : undefined,
-    `Created: ${new Date(task.createdAt).toISOString()}`,
-    task.startedAt ? `Started: ${new Date(task.startedAt).toISOString()}` : undefined,
-    task.finishedAt ? `Finished: ${new Date(task.finishedAt).toISOString()}` : undefined,
-    `Duration: ${formatDuration(deriveTaskDuration(task))}`,
-    `Heartbeat: ${formatAge(task.heartbeatAt)}`,
-    `Watched: ${task.watchCount ?? 0}`,
-    task.reusedFrom ? `Reused from: ${task.reusedFrom}` : undefined,
+    formatTaskHeading(task, staleAfterMs),
+    summarizeTaskState(task),
+    summarizeTaskDetail(task),
     "",
-    "Suggested next steps:",
+    "Next:",
     ...buildBackgroundNextSteps(task, staleAfterMs),
     "",
-    "Log tail:",
+    "Recent log:",
     tailLog(task.logPath, maxLines),
+    "",
+    "Details:",
+    ...buildBackgroundDetails(task),
   ].filter((line): line is string => Boolean(line)).join("\n");
 }
 
 export function renderBackgroundResult(task: BackgroundTaskRecord, options?: { includeLogTail?: boolean; logLines?: number; staleAfterMs?: number }): string {
   const staleAfterMs = options?.staleAfterMs ?? 20000;
-  const logTail = options?.includeLogTail ? `\n\nLog tail:\n${tailLog(task.logPath, Math.max(1, Math.floor(options?.logLines ?? 60)))}` : "";
+  const includeLogTail = options?.includeLogTail || task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs);
+  const logTail = includeLogTail ? tailLog(task.logPath, Math.max(1, Math.floor(options?.logLines ?? 60))) : undefined;
   return [
-    `${task.id} [${isTaskStale(task, staleAfterMs) ? `${task.status}/stale` : task.status}] ${task.agent}`,
-    `Task: ${task.task}`,
-    `Duration: ${formatDuration(deriveTaskDuration(task))}`,
-    task.summary ? `\nSummary:\n${task.summary}` : `\nSummary:\n(no summary)`,
-    task.result ? `\nResult:\n${summarizeSingleResult(task.result)}` : undefined,
-    `\nSuggested next steps:\n${buildBackgroundNextSteps(task, staleAfterMs).join("\n")}`,
+    formatTaskHeading(task, staleAfterMs),
+    summarizeTaskState(task),
+    summarizeTaskDetail(task),
+    "",
+    "Next:",
+    ...buildBackgroundNextSteps(task, staleAfterMs),
+    logTail ? "" : undefined,
+    logTail ? "Recent log:" : undefined,
     logTail,
+    "",
+    "Details:",
+    ...buildBackgroundDetails(task),
   ].filter((line): line is string => Boolean(line)).join("\n");
 }
 

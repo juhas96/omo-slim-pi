@@ -1,21 +1,21 @@
-bg-42 [failed] fixer
-Task: Patch the thing
-Summary: Patch failed after validation
-Session key: fixer:abc123
-Created: 2023-11-14T22:11:40.000Z
-Started: 2023-11-14T22:12:20.000Z
-Finished: 2023-11-14T22:12:50.000Z
-Duration: 30s
-Heartbeat: 2s ago
-Watched: 3
-Suggested next steps:
-- Open action menu: /pantheon-task-actions bg-42
-- Inspect result: /pantheon-result bg-42
-- Inspect watch view: /pantheon-watch bg-42
-- Inspect log tail: /pantheon-log bg-42
-- Retry task: /pantheon-retry bg-42
-Log tail:
+bg-42 • failed • fixer • 30s
+Patch failed after validation
+Patch failed on verification
+Next:
+- /pantheon-result bg-42
+- /pantheon-log bg-42
+- /pantheon-retry bg-42
+- /pantheon-task-actions bg-42
+Recent log:
 line 2
 line 3
 line 4
 line 5
+Details:
+Task: Patch the thing
+Session key: fixer:abc123
+Created: 2023-11-14T22:11:40.000Z
+Started: 2023-11-14T22:12:20.000Z
+Finished: 2023-11-14T22:12:50.000Z
+Heartbeat: 2s ago
+Watched: 3

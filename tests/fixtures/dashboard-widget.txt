@@ -1,6 +1,4 @@
-Pantheon • 1 running • 1 queued • 1 trouble • 3 todos • auto on • 2 warnings
-running fixer bg-1 Implement thing
-queued explorer bg-2 Map repo structure
-☐ First todo item
-☐ Second todo item
-… +1 more persisted todo
+Pantheon • attention needed
+failed: 1 • running: 1 • queued: 1 • todos: 3 • warnings: 2 • auto: on
+attention: bg-3 librarian [failed] — Read docs
+next: /pantheon-task-actions bg-3
