@@ -10,7 +10,7 @@ Pantheon doctor report
 Workspace: <PROJECT_DIR>
 Config diagnostics: 3 (1 errors, 2 warnings)
 Adapter health checks: 7 (2 attention needed)
-Background task dir: ready — <BACKGROUND_DIR>
+Background task dir: missing — <BACKGROUND_DIR>
 Debug dir: ready — <DEBUG_DIR>
 Workflow state file: not yet created — <WORKFLOW_STATE>
 tmux available: <detected>
@@ -21,7 +21,7 @@ Checks:
 - Config: error
 - Adapters: warning
 - Multiplexer: warning
-- Background storage: ok
+- Background storage: warning
 - Debug artifacts: ok
 
 Config diagnostics:
@@ -42,4 +42,5 @@ Suggested next steps:
 - Fix config errors first, then rerun /pantheon-doctor.
 - Review /pantheon-config for merged config details and warning context.
 - Start pi inside tmux to use /pantheon-attach and shared background panes.
+- Run a background task once to create the task directory, or create it manually if desired.
 - Run /pantheon-adapter-health for focused adapter readiness details.

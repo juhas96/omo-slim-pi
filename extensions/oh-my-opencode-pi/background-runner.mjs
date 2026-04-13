@@ -38,11 +38,29 @@ function hasMeaningfulResult(result) {
   return getFinalOutput(result.messages).trim().length > 0;
 }
 
+function extractTextFromMessage(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+}
+
+function isLikelyFinalAssistantMessage(message) {
+  if (message?.role !== "assistant") return false;
+  if (!extractTextFromMessage(message)) return false;
+  return Boolean(message.stopReason && !["aborted", "error", "tool_use"].includes(message.stopReason));
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const CORE_CLI_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+const SUBAGENT_FINAL_MESSAGE_GRACE_MS = 1500;
 
 function canUseCliToolFilter(tools) {
   return Boolean(tools?.length) && tools.every((tool) => CORE_CLI_TOOL_NAMES.has(tool));
@@ -74,7 +92,7 @@ async function runAttempt(spec, model) {
   const result = {
     agent: spec.agent,
     task: spec.task,
-    exitCode: 0,
+    exitCode: -1,
     messages: [],
     stderr: "",
     model,
@@ -114,6 +132,21 @@ async function runAttempt(spec, model) {
 
     const log = fs.createWriteStream(spec.logPath, { flags: "a" });
     let buffer = "";
+    let lingerTimer;
+
+    const clearLingerTimer = () => {
+      if (!lingerTimer) return;
+      clearTimeout(lingerTimer);
+      lingerTimer = undefined;
+    };
+
+    const scheduleLingerShutdown = () => {
+      if (lingerTimer) return;
+      lingerTimer = setTimeout(() => {
+        lingerTimer = undefined;
+        if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
+      }, SUBAGENT_FINAL_MESSAGE_GRACE_MS);
+    };
 
     const processLine = (line) => {
       if (!line.trim()) return;
@@ -126,6 +159,7 @@ async function runAttempt(spec, model) {
           result.stopReason = event.message.stopReason;
           result.errorMessage = event.message.errorMessage;
           if (!result.model && event.message.model) result.model = event.message.model;
+          if (isLikelyFinalAssistantMessage(event.message)) scheduleLingerShutdown();
         }
       }
       if (event.type === "tool_result_end" && event.message) result.messages.push(event.message);
@@ -143,6 +177,7 @@ async function runAttempt(spec, model) {
       log.write(text);
     });
     proc.on("close", (code) => {
+      clearLingerTimer();
       if (buffer.trim()) processLine(buffer);
       result.exitCode = code ?? 0;
       if (timedOut && !result.stderr.includes("Subagent aborted (timeout)")) {
@@ -153,6 +188,7 @@ async function runAttempt(spec, model) {
       resolve(result);
     });
     proc.on("error", (error) => {
+      clearLingerTimer();
       result.exitCode = 1;
       result.stderr += String(error);
       cleanupTimer();

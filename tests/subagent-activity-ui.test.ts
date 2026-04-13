@@ -34,6 +34,19 @@ function fakeTheme() {
   };
 }
 
+function findFirstFile(root: string, fileName: string): string | undefined {
+  if (!fs.existsSync(root)) return undefined;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isFile() && entry.name === fileName) return fullPath;
+    if (entry.isDirectory()) {
+      const nested = findFirstFile(fullPath, fileName);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
+
 test("pantheon_delegate updates the subagent activity widget for parallel runs", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-subagent-widget-delegate-"));
   const projectDir = path.join(tempRoot, "project");
@@ -89,6 +102,60 @@ test("pantheon_delegate updates the subagent activity widget for parallel runs",
     assert.match(combined, /explorer/);
     assert.match(combined, /librarian/);
     assert.match(combined, /live:Task:/);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
+test("pantheon_delegate keeps live widget entries in running state until the process actually closes", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-subagent-widget-running-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const fakePiScript = path.join(tempRoot, "slow-close-pi.mjs");
+  fs.writeFileSync(fakePiScript, `
+    const task = process.argv[process.argv.length - 1] || "";
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "live:" + task.slice(0, 40) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+    setTimeout(() => process.exit(0), 300);
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = fakePiScript;
+  try {
+    const widgetCalls: Array<{ key: string; lines?: string[] }> = [];
+    const { tools } = registerHarness();
+    const delegateTool = tools.get("pantheon_delegate");
+    await delegateTool.execute(
+      "call-running",
+      { agent: "fixer", task: "Wait for process close" },
+      undefined,
+      undefined,
+      {
+        cwd: projectDir,
+        ui: {
+          theme: fakeTheme(),
+          setWidget(key: string, lines?: string[]) {
+            widgetCalls.push({ key, lines });
+          },
+          setEditorText() {},
+          notify() {},
+          setStatus() {},
+        },
+      },
+    );
+
+    const activityLines = widgetCalls
+      .filter((call) => call.key === "oh-my-opencode-pi-subagent-activity" && Array.isArray(call.lines))
+      .map((call) => call.lines?.join("\n") ?? "");
+    assert.ok(activityLines.some((text) => text.includes("… fixer — live:Task:")));
+    assert.ok(activityLines.some((text) => text.includes("✓ fixer — live:Task:")));
   } finally {
     process.argv[1] = originalArgv1;
   }
@@ -194,6 +261,11 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
       },
     );
 
+    const debugDir = path.join(projectDir, ".oh-my-opencode-pi-debug");
+    const stdoutPath = findFirstFile(debugDir, "stdout.ndjson");
+    assert.ok(stdoutPath);
+    fs.writeFileSync(stdoutPath!, `header\n${"chunk-".repeat(12_000)}`, "utf8");
+
     let customCalls = 0;
     await pantheonSubagents.handler("", {
       cwd: projectDir,
@@ -212,6 +284,8 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
     });
     assert.match(editorWrites[0] ?? "", /Subagent: explorer/);
     assert.match(editorWrites[0] ?? "", /Stdout:/);
+    assert.match(editorWrites[0] ?? "", /truncated: showing last/i);
+    assert.ok((editorWrites[0] ?? "").length < 80_000);
 
     customCalls = 0;
     await pantheonSubagents.handler("", {

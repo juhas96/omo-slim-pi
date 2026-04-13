@@ -57,6 +57,47 @@ test("pantheon_delegate and pantheon_council execute through the subagent runner
   }
 });
 
+test("pantheon_delegate resolves shortly after a final assistant message even if the child lingers", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-linger-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
+  fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.json"), JSON.stringify({
+    fallback: { delegateTimeoutMs: 5000, retryOnEmpty: false },
+    workflow: { persistTodos: false },
+  }, null, 2));
+
+  const lingerPiScript = path.join(tempRoot, "linger-pi.mjs");
+  fs.writeFileSync(lingerPiScript, `
+    const task = process.argv[process.argv.length - 1] || "";
+    process.on("SIGTERM", () => process.exit(0));
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "ok:" + task.slice(0, 40) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+    setInterval(() => {}, 1000);
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = lingerPiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+    const startedAt = Date.now();
+    const result = await delegateTool.execute("call-linger", { agent: "fixer", task: "Complete and linger" }, undefined, undefined, { cwd: projectDir });
+    const durationMs = Date.now() - startedAt;
+    assert.equal(result.isError, false);
+    assert.match(result.content[0]?.text ?? "", /ok:Task:/);
+    assert.ok(durationMs < 4000, `Expected fast completion after final message, got ${durationMs}ms`);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
 test("pantheon_delegate reports failures from the subagent runner", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-fail-"));
   const projectDir = path.join(tempRoot, "project");

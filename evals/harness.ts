@@ -409,7 +409,9 @@ async function runAdapterLocalDocsRouting(def: OrchestrationScenarioDefinition):
 
 async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition): Promise<OrchestrationScenarioActualResult> {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-eval-doctor-"));
+  const agentDir = path.join(tempRoot, "agent");
   const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
   fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), `{
     "$schema": "../missing-schema.json",
@@ -417,50 +419,52 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
     "multiplexer": { "layout": "zigzag" }
   }`);
 
-  const commandMessages: Array<{ content?: string; details?: any }> = [];
-  const { commands } = registerHarness(commandMessages);
-  const command = commands.get("pantheon-doctor");
-  const editorWrites: string[] = [];
-  const startedAt = Date.now();
-  await command.handler("", {
-    cwd: projectDir,
-    hasUI: true,
-    ui: {
-      notify() {},
-      setEditorText(text: string) {
-        editorWrites.push(text);
+  return withAgentDir(agentDir, async () => {
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const { commands } = registerHarness(commandMessages);
+    const command = commands.get("pantheon-doctor");
+    const editorWrites: string[] = [];
+    const startedAt = Date.now();
+    await command.handler("", {
+      cwd: projectDir,
+      hasUI: true,
+      ui: {
+        notify() {},
+        setEditorText(text: string) {
+          editorWrites.push(text);
+        },
+        setStatus() {},
+        setWidget() {},
+        input: async () => "",
+        custom: async () => null,
       },
-      setStatus() {},
-      setWidget() {},
-      input: async () => "",
-      custom: async () => null,
-    },
+    });
+    const finalText = commandMessages.at(-1)?.content ?? "";
+    const normalizedText = finalText
+      .replace(new RegExp(escapeRegExp(projectDir), "g"), "<PROJECT_DIR>")
+      .replace(new RegExp(escapeRegExp(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc")), "g"), "<PROJECT_CONFIG>")
+      .replace(/Background task dir: (ready|missing) — .+/g, "Background task dir: $1 — <BACKGROUND_DIR>")
+      .replace(/Debug dir: (ready|missing) — .+/g, "Debug dir: $1 — <DEBUG_DIR>")
+      .replace(/Workflow state file: (present|not yet created) — .+/g, "Workflow state file: $1 — <WORKFLOW_STATE>")
+      .replace(/tmux available: (yes|no)/g, "tmux available: <detected>")
+      .replace(/inside tmux: (yes|no)/g, "inside tmux: <detected>");
+    const passed = editorWrites.length === 0 && /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
+    return {
+      scenarioId: def.id,
+      title: def.title,
+      workflow: def.workflow,
+      passed,
+      durationMs: Math.max(1, Date.now() - startedAt),
+      attempts: 1,
+      qualityScore: passed ? 1 : 0.25,
+      timeline: [
+        `Scenario: ${def.id}`,
+        normalizedText,
+      ].join("\n"),
+      outputPreview: previewText(normalizedText),
+      notes: [passed ? "Doctor surfaced categorized diagnostics and next steps." : "Doctor report missing expected guidance."],
+    };
   });
-  const finalText = commandMessages.at(-1)?.content ?? "";
-  const normalizedText = finalText
-    .replace(new RegExp(escapeRegExp(projectDir), "g"), "<PROJECT_DIR>")
-    .replace(new RegExp(escapeRegExp(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc")), "g"), "<PROJECT_CONFIG>")
-    .replace(/Background task dir: (ready|missing) — .+/g, "Background task dir: $1 — <BACKGROUND_DIR>")
-    .replace(/Debug dir: (ready|missing) — .+/g, "Debug dir: $1 — <DEBUG_DIR>")
-    .replace(/Workflow state file: (present|not yet created) — .+/g, "Workflow state file: $1 — <WORKFLOW_STATE>")
-    .replace(/tmux available: (yes|no)/g, "tmux available: <detected>")
-    .replace(/inside tmux: (yes|no)/g, "inside tmux: <detected>");
-  const passed = editorWrites.length === 0 && /Pantheon doctor report/i.test(normalizedText) && /Config diagnostics:/i.test(normalizedText) && /Suggested next steps:/i.test(normalizedText);
-  return {
-    scenarioId: def.id,
-    title: def.title,
-    workflow: def.workflow,
-    passed,
-    durationMs: Math.max(1, Date.now() - startedAt),
-    attempts: 1,
-    qualityScore: passed ? 1 : 0.25,
-    timeline: [
-      `Scenario: ${def.id}`,
-      normalizedText,
-    ].join("\n"),
-    outputPreview: previewText(normalizedText),
-    notes: [passed ? "Doctor surfaced categorized diagnostics and next steps." : "Doctor report missing expected guidance."],
-  };
 }
 
 export async function runOrchestrationScenario(def: OrchestrationScenarioDefinition): Promise<OrchestrationScenarioActualResult> {

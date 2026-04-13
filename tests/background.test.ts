@@ -107,6 +107,66 @@ test("background task spec can complete, reuse active sessions, and retry via th
   }
 });
 
+test("background runner completes soon after a final assistant message even if the child lingers", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-linger-"));
+  const agentDir = path.join(tempRoot, "agent");
+  const projectDir = path.join(tempRoot, "project");
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.json"), JSON.stringify({
+    background: { enabled: true, logDir: taskDir, maxConcurrent: 1, reuseSessions: false, heartbeatIntervalMs: 250, staleAfterMs: 5000 },
+    workflow: { persistTodos: false },
+  }, null, 2));
+
+  const lingerPi = path.join(tempRoot, "linger-pi.mjs");
+  fs.writeFileSync(lingerPi, `
+    const task = process.argv[process.argv.length - 1] || "";
+    process.on("SIGTERM", () => process.exit(0));
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "background ok:" + task.slice(0, 30) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+    setInterval(() => {}, 1000);
+  `);
+
+  const previous = process.env[AGENT_DIR_ENV];
+  process.env[AGENT_DIR_ENV] = agentDir;
+  try {
+    const startedAt = Date.now();
+    const task = enqueueBackgroundSpec(projectDir, {
+      agent: "fixer",
+      task: "Run lingering background task",
+      cwd: projectDir,
+      piCommand: process.execPath,
+      piBaseArgs: [lingerPi],
+      retryOnEmpty: false,
+      timeoutMs: 5000,
+    }, {
+      taskDir,
+      randomId: () => "bg_linger",
+      maxConcurrent: 1,
+    });
+
+    await waitFor(() => listBackgroundTasks(taskDir).some((entry) => entry.id === task.id && entry.status === "completed"), 7000);
+    const completed = listBackgroundTasks(taskDir).find((entry) => entry.id === task.id);
+    const durationMs = Date.now() - startedAt;
+    assert.equal(completed?.status, "completed");
+    assert.match(completed?.summary ?? "", /background ok:/i);
+    assert.ok(durationMs < 4000, `Expected fast background completion after final message, got ${durationMs}ms`);
+  } finally {
+    if (previous === undefined) delete process.env[AGENT_DIR_ENV];
+    else process.env[AGENT_DIR_ENV] = previous;
+  }
+});
+
 test("background runner avoids CLI --tools when the agent depends on extension tools", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-tools-"));
   const agentDir = path.join(tempRoot, "agent");

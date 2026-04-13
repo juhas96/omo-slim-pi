@@ -183,6 +183,9 @@ const WORKFLOW_GUIDANCE_KEY = "oh-my-opencode-pi-workflow-guidance";
 const SUBAGENT_ACTIVITY_KEY = "oh-my-opencode-pi-subagent-activity";
 const COMMAND_PROGRESS_STATUS_KEY = "oh-my-opencode-pi-command-progress";
 const VERSION_STATUS_KEY = "oh-my-opencode-pi-version";
+const SUBAGENT_FINAL_MESSAGE_GRACE_MS = 1500;
+const SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES = 24 * 1024;
+const SUBAGENT_DETAIL_LOG_PREVIEW_BYTES = 48 * 1024;
 let latestSubagentActivity: SubagentActivityState | undefined;
 
 function getFinalOutput(messages: Message[]): string {
@@ -217,6 +220,12 @@ function extractTextFromMessage(message: Message): string {
     .map((part) => part.text)
     .join("\n")
     .trim();
+}
+
+function isLikelyFinalAssistantMessage(message: Message): boolean {
+  if (message.role !== "assistant") return false;
+  if (!extractTextFromMessage(message)) return false;
+  return Boolean(message.stopReason && !["aborted", "error", "tool_use"].includes(message.stopReason));
 }
 
 function previewText(text: string, max = 180): string {
@@ -559,10 +568,29 @@ function renderSubagentActivityLines(
   return lines;
 }
 
-function safeReadText(filePath: string | undefined, fallback = "(missing file)"): string {
+function readDebugArtifactPreview(
+  filePath: string | undefined,
+  fallback: string,
+  options?: { maxBytes?: number; mode?: "head" | "tail" },
+): string {
   if (!filePath) return fallback;
   try {
-    return fs.readFileSync(filePath, "utf8");
+    const stats = fs.statSync(filePath);
+    const maxBytes = Math.max(1024, Math.floor(options?.maxBytes ?? SUBAGENT_DETAIL_LOG_PREVIEW_BYTES));
+    if (stats.size <= maxBytes) return fs.readFileSync(filePath, "utf8");
+
+    const start = options?.mode === "tail" ? Math.max(0, stats.size - maxBytes) : 0;
+    const length = Math.min(maxBytes, stats.size - start);
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const buffer = Buffer.alloc(length);
+      fs.readSync(fd, buffer, 0, length, start);
+      const excerpt = buffer.toString("utf8");
+      const label = options?.mode === "tail" ? "last" : "first";
+      return [`[truncated: showing ${label} ${length} bytes of ${stats.size} from ${filePath}]`, excerpt].join("\n");
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return fallback;
   }
@@ -580,19 +608,24 @@ function buildSubagentDetailText(entry: { label: string; result: SingleResult })
     formatElapsed(result.durationMs) ? `Duration: ${formatElapsed(result.durationMs)}` : undefined,
     result.debugTraceId ? `Trace: ${result.debugTraceId}` : undefined,
     result.debugDir ? `Debug dir: ${result.debugDir}` : undefined,
+    result.debugSummaryPath ? `Summary JSON path: ${result.debugSummaryPath}` : undefined,
+    result.debugStdoutPath ? `Stdout path: ${result.debugStdoutPath}` : undefined,
+    result.debugStderrPath ? `Stderr path: ${result.debugStderrPath}` : undefined,
     `Task: ${result.task}`,
     "",
     "Summary:",
     summarizeResult(result),
     "",
     "Summary JSON:",
-    safeReadText(result.debugSummaryPath, "(no summary file)"),
+    readDebugArtifactPreview(result.debugSummaryPath, "(no summary file)", { maxBytes: SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES }),
     "",
     "Stdout:",
-    safeReadText(result.debugStdoutPath, "(no stdout log)"),
+    readDebugArtifactPreview(result.debugStdoutPath, "(no stdout log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }),
     "",
     "Stderr:",
-    safeReadText(result.debugStderrPath, result.stderr || "(no stderr log)"),
+    result.debugStderrPath
+      ? readDebugArtifactPreview(result.debugStderrPath, result.stderr || "(no stderr log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })
+      : (result.stderr || "(no stderr log)"),
   ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
@@ -792,7 +825,7 @@ async function runSingleAgent(
     agent: agent.name,
     agentSource: agent.source,
     task,
-    exitCode: 0,
+    exitCode: -1,
     messages: [],
     stderr: "",
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
@@ -848,6 +881,21 @@ async function runSingleAgent(
       },
     });
     let buffer = "";
+    let lingerTimer: NodeJS.Timeout | undefined;
+
+    const clearLingerTimer = () => {
+      if (!lingerTimer) return;
+      clearTimeout(lingerTimer);
+      lingerTimer = undefined;
+    };
+
+    const scheduleLingerShutdown = () => {
+      if (lingerTimer) return;
+      lingerTimer = setTimeout(() => {
+        lingerTimer = undefined;
+        if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
+      }, SUBAGENT_FINAL_MESSAGE_GRACE_MS);
+    };
 
     const processLine = (line: string) => {
       if (!line.trim()) return;
@@ -877,6 +925,7 @@ async function runSingleAgent(
           if (!currentResult.model && msg.model) currentResult.model = msg.model;
           if (msg.stopReason) currentResult.stopReason = msg.stopReason;
           if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+          if (isLikelyFinalAssistantMessage(msg)) scheduleLingerShutdown();
         }
         emitUpdate();
       }
@@ -901,11 +950,13 @@ async function runSingleAgent(
     });
 
     proc.on("close", (code) => {
+      clearLingerTimer();
       if (buffer.trim()) processLine(buffer);
       resolve(code ?? 0);
     });
 
     proc.on("error", (error) => {
+      clearLingerTimer();
       currentResult.errorMessage = error instanceof Error ? error.message : String(error);
       if (debug) writeDebugText(debug.stderrPath, `${currentResult.errorMessage}\n`);
       resolve(1);
@@ -913,6 +964,7 @@ async function runSingleAgent(
 
     if (signal) {
       const killProc = () => {
+        clearLingerTimer();
         abortReason = String(signal.reason ?? "aborted");
         currentResult.abortReason = abortReason;
         currentResult.stopReason = "aborted";
