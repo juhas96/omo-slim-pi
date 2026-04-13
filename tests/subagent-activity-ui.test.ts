@@ -322,9 +322,80 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
         input: async () => "",
       },
     });
-    assert.equal(editorWrites[2] ?? "", "");
-    assert.match(commandMessages.at(-1)?.content ?? "", /Command: \/pantheon-debug/);
-    assert.match(commandMessages.at(-1)?.content ?? "", /Trace:/);
+    assert.match(editorWrites[2] ?? "", /Command: \/pantheon-debug/);
+    assert.match(editorWrites[2] ?? "", /Trace:/);
+    assert.equal(commandMessages.length, 0);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
+test("pantheon-debug still posts direct trace inspection through command chat output", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-subagent-widget-direct-debug-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const fakePiScript = path.join(tempRoot, "fake-pi.mjs");
+  fs.writeFileSync(fakePiScript, `
+    const task = process.argv[process.argv.length - 1] || "";
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "live:" + task.slice(0, 40) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = fakePiScript;
+  try {
+    const commandMessages: Array<{ content?: string; details?: any }> = [];
+    const { tools, commands } = registerHarness(commandMessages);
+    const delegateTool = tools.get("pantheon_delegate");
+    const pantheonDebug = commands.get("pantheon-debug");
+    assert.ok(delegateTool?.execute);
+    assert.ok(pantheonDebug?.handler);
+
+    await delegateTool.execute(
+      "call-debug",
+      { tasks: [{ agent: "explorer", task: "Analyze the repo" }], includeProjectAgents: true },
+      undefined,
+      undefined,
+      {
+        cwd: projectDir,
+        ui: {
+          theme: fakeTheme(),
+          setWidget() {},
+          setEditorText() {},
+          notify() {},
+          setStatus() {},
+        },
+      },
+    );
+
+    let editorText = "";
+    await pantheonDebug.handler("", {
+      cwd: projectDir,
+      hasUI: false,
+      ui: {
+        theme: fakeTheme(),
+        custom: async () => null,
+        setWidget() {},
+        setEditorText(text: string) {
+          editorText = text;
+        },
+        notify() {},
+        setStatus() {},
+        input: async () => "",
+      },
+    });
+
+    assert.equal(editorText, "");
+    assert.equal(commandMessages.length, 1);
+    assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-debug/);
+    assert.match(commandMessages[0]?.content ?? "", /Trace:/);
   } finally {
     process.argv[1] = originalArgv1;
   }

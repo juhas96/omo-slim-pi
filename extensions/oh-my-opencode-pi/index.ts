@@ -2912,7 +2912,11 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.notify(result.files.length > 0 ? `Bootstrapped Pantheon project files in ${result.rootDir}.` : "Pantheon bootstrap skipped existing files (use the tool with force to overwrite).", "info");
   }
 
-  async function handlePantheonDebugCommand(args: string, ctx: ExtensionContext) {
+  async function handlePantheonDebugCommand(
+    args: string,
+    ctx: ExtensionContext,
+    options?: { localOnly?: boolean },
+  ) {
     const config = loadPantheonConfig(ctx.cwd).config;
     const debugDir = resolveDebugLogDir(ctx.cwd, config);
     const traces = listDebugTraces(debugDir);
@@ -2942,7 +2946,10 @@ export default function (pi: ExtensionAPI) {
     const summaryText = fs.existsSync(trace.summaryPath) ? fs.readFileSync(trace.summaryPath, "utf8") : "{}";
     presentPantheonCommandEditorOutput("/pantheon-debug", `Trace: ${trace.id}\nDirectory: ${path.join(debugDir, trace.id)}\n\nSummary:\n${summaryText}\n\nEvents:\n${eventText}`, ctx, {
       summary: `Debug trace ${trace.id}`,
-      notifyMessage: `Posted debug trace ${trace.id} to chat.`,
+      notifyMessage: options?.localOnly === true
+        ? `Loaded debug trace ${trace.id} into editor.`
+        : `Posted debug trace ${trace.id} to chat.`,
+      modes: options?.localOnly === true ? ["widget-summary", "editor-report", "notify"] : undefined,
     });
   }
 
@@ -3323,7 +3330,7 @@ export default function (pi: ExtensionAPI) {
     const action = await showPantheonSelect(ctx, `Subagent · ${entry.label}`, nextItems);
     if (!action) return;
     if (action === "trace" && entry.result.debugTraceId) {
-      await handlePantheonDebugCommand(entry.result.debugTraceId, ctx);
+      await handlePantheonDebugCommand(entry.result.debugTraceId, ctx, { localOnly: true });
       return;
     }
     if (action === "summary") {
