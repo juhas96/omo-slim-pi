@@ -2921,6 +2921,9 @@ export default function (pi: ExtensionAPI) {
       summary: hasError ? "Pantheon doctor found issues" : hasWarning ? "Pantheon doctor found warnings" : "Pantheon doctor passed",
       notifyMessage: hasError ? "Pantheon doctor found issues." : hasWarning ? "Pantheon doctor found warnings." : "Pantheon doctor passed.",
       status: hasError ? "error" : hasWarning ? "warning" : "success",
+      modes: hasError || hasWarning
+        ? ["widget-summary", "editor-report", "notify"]
+        : ["widget-summary", "editor-report"],
     });
   }
 

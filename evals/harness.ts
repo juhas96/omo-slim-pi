@@ -439,7 +439,7 @@ async function runDoctorConfigDiagnostics(def: OrchestrationScenarioDefinition):
         custom: async () => null,
       },
     });
-    const finalText = commandMessages.at(-1)?.content ?? "";
+    const finalText = editorWrites.at(-1) ?? commandMessages.at(-1)?.content ?? "";
     const normalizedText = finalText
       .replace(new RegExp(escapeRegExp(projectDir), "g"), "<PROJECT_DIR>")
       .replace(new RegExp(escapeRegExp(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc")), "g"), "<PROJECT_CONFIG>")

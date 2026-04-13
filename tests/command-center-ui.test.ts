@@ -405,7 +405,7 @@ test("pantheon-adapters opens an adapter policy report in chat", async () => {
   assert.match(commandMessages[0]?.content ?? "", /Allowed adapters:/);
 });
 
-test("pantheon-doctor opens a structured health report in chat", async () => {
+test("pantheon-doctor keeps the health report in editor/widget surfaces", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-doctor-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
@@ -442,10 +442,7 @@ test("pantheon-doctor opens a structured health report in chat", async () => {
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-doctor/);
-  assert.equal(commandMessages.length, 1);
-  assert.match(commandMessages[0]?.content ?? "", /Command: \/pantheon-doctor/);
-  assert.match(commandMessages[0]?.content ?? "", /Pantheon doctor report/);
-  assert.match(commandMessages[0]?.content ?? "", /Config diagnostics:/);
+  assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
 });
 

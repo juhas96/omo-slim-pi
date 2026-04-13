@@ -59,7 +59,6 @@ Start with:
 Commands like:
 - `/pantheon-runtime`
 - `/pantheon-config`
-- `/pantheon-doctor`
 - `/pantheon-adapters`
 - `/pantheon-result`
 
@@ -73,6 +72,8 @@ Long-running delegate and council commands stream **running** widget updates whi
 
 Use the editor report when you need the full output.
 Use the widget when you only need quick confirmation of what command ran and what to do next.
+
+`/pantheon-doctor` is slightly different: it stays in the editor + command widget (and uses a notification for warnings/errors) instead of posting a chat report.
 
 ### Subagent activity
 
