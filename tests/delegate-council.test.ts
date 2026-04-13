@@ -57,6 +57,46 @@ test("pantheon_delegate and pantheon_council execute through the subagent runner
   }
 });
 
+test("pantheon_delegate single-mode progress updates include delegate details", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-single-progress-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const fakePiScript = path.join(tempRoot, "fake-pi.mjs");
+  fs.writeFileSync(fakePiScript, `
+    const task = process.argv[process.argv.length - 1] || "";
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "ok:" + task.slice(0, 40) }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = fakePiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+    const partials: any[] = [];
+    const result = await delegateTool.execute(
+      "call-single-progress",
+      { agent: "oracle", task: "Review this repository" },
+      undefined,
+      (partial: any) => partials.push(partial),
+      { cwd: projectDir },
+    );
+
+    assert.equal(result.isError, false);
+    assert.ok(partials.length > 0);
+    assert.ok(partials.some((partial) => partial.details?.mode === "single"));
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
 test("pantheon_delegate resolves shortly after a final assistant message even if the child lingers", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-linger-"));
   const projectDir = path.join(tempRoot, "project");

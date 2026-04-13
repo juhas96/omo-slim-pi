@@ -119,12 +119,15 @@ import {
 import {
   buildPantheonDashboardLines,
   getTaskStateChip,
+  type PantheonSubagentInspectorSnapshot,
   type RenderTheme,
   renderBackgroundToolCall,
   renderBackgroundToolResult,
   renderPantheonCommandMessage,
   renderWorkflowToolResult,
+  showPantheonReportModal,
   showPantheonSelect,
+  showPantheonSubagentInspector,
 } from "./ui.js";
 import {
   renderAdapterSelectionReport,
@@ -541,6 +544,64 @@ function buildSubagentActivityPreview(result: SingleResult): string {
   return duration ? `${body} (${duration})` : body;
 }
 
+function getSubagentStatusLabel(result: SingleResult): string {
+  if (result.exitCode === -1) return "running";
+  if (result.exitCode === 0 && result.stopReason !== "error" && result.stopReason !== "aborted") return "completed";
+  if (result.abortReason || result.stopReason === "aborted") return "aborted";
+  return "failed";
+}
+
+function collectPreviewLines(text: string, maxLines: number, mode: "head" | "tail" = "tail"): string[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length <= maxLines) return lines;
+  return mode === "head" ? lines.slice(0, maxLines) : lines.slice(-maxLines);
+}
+
+function buildSubagentExpandedLines(entry: { label: string; result: SingleResult }, options?: { stdoutLines?: number; stderrLines?: number }): string[] {
+  const result = entry.result;
+  const statusParts = [getSubagentStatusLabel(result)];
+  if (result.model) statusParts.push(`model ${previewText(result.model, 40)}`);
+  const duration = formatElapsed(result.durationMs ?? (typeof result.startedAt === "number" && result.exitCode === -1 ? Date.now() - result.startedAt : undefined));
+  if (duration) statusParts.push(duration);
+
+  const lines = [
+    `task: ${previewText(result.task, 140)}`,
+    `status: ${statusParts.join(" • ")}`,
+    `summary: ${previewText(summarizeResult(result), 180)}`,
+  ];
+
+  if (result.debugStdoutPath) {
+    const stdoutPreview = readDebugArtifactPreview(result.debugStdoutPath, "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" });
+    const stdoutLines = collectPreviewLines(stdoutPreview, Math.max(2, options?.stdoutLines ?? 4));
+    if (stdoutLines.length > 0) lines.push(`stdout: ${stdoutLines.join(" ⏎ ")}`);
+  }
+
+  const stderrText = result.debugStderrPath
+    ? readDebugArtifactPreview(result.debugStderrPath, result.stderr || "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })
+    : result.stderr;
+  const stderrLines = collectPreviewLines(stderrText || "", Math.max(1, options?.stderrLines ?? 2));
+  if (stderrLines.length > 0) lines.push(`stderr: ${stderrLines.join(" ⏎ ")}`);
+
+  return lines;
+}
+
+function buildSubagentInspectorSnapshot(activity: SubagentActivityState | undefined): PantheonSubagentInspectorSnapshot | undefined {
+  if (!activity || activity.entries.length === 0) return undefined;
+  return {
+    title: activity.title,
+    subtitle: activity.subtitle,
+    entries: activity.entries.map((entry) => ({
+      label: entry.label,
+      description: buildSubagentActivityPreview(entry.result),
+      expandedLines: buildSubagentExpandedLines(entry, { stdoutLines: 5, stderrLines: 3 }),
+      traceAvailable: Boolean(entry.result.debugTraceId),
+    })),
+  };
+}
+
 function renderSubagentActivityLines(
   ctx: ExtensionContext,
   options: {
@@ -565,6 +626,7 @@ function renderSubagentActivityLines(
       `${theme.fg(state.color, state.icon)} ${theme.fg("accent", entry.label)} ${theme.fg("muted", "—")} ${theme.fg("muted", buildSubagentActivityPreview(entry.result))}`,
     );
   }
+  lines.push(fg("dim", "Inspect live detail: /pantheon-subagents"));
   return lines;
 }
 
@@ -748,12 +810,19 @@ function renderDelegateResult(
   }
 
   const lines = [
-    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", `${details.mode}`)}`,
+    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", `${details.mode ?? "single"}`)}`,
     summarizeResultStates(details.results, theme),
   ];
 
   const results = expanded ? details.results : details.results.slice(0, 6);
-  for (const item of results) lines.push(formatResultLine(item, theme, expanded ? 180 : 110));
+  for (const item of results) {
+    lines.push(formatResultLine(item, theme, expanded ? 180 : 110));
+    if (expanded) {
+      for (const detail of buildSubagentExpandedLines({ label: item.agent, result: item }, { stdoutLines: 3, stderrLines: 2 })) {
+        lines.push(`  ${theme.fg("muted", detail)}`);
+      }
+    }
+  }
   if (!expanded && details.results.length > results.length) {
     lines.push(theme.fg("muted", `… +${details.results.length - results.length} more (expand to view all)`));
   }
@@ -786,9 +855,21 @@ function renderCouncilResult(
   const lines = [
     `${theme.fg("toolTitle", theme.bold("pantheon_council"))} ${theme.fg("accent", details.preset)}`,
     summarizeResultStates([...details.councillors, details.master], theme),
-    ...details.councillors.map((c) => formatResultLine({ ...c, agent: c.memberName }, theme, expanded ? 180 : 90)),
-    formatResultLine({ ...details.master, agent: "master" }, theme, expanded ? 220 : 110),
   ];
+  for (const councillor of details.councillors) {
+    lines.push(formatResultLine({ ...councillor, agent: councillor.memberName }, theme, expanded ? 180 : 90));
+    if (expanded) {
+      for (const detail of buildSubagentExpandedLines({ label: councillor.memberName, result: councillor }, { stdoutLines: 3, stderrLines: 2 })) {
+        lines.push(`  ${theme.fg("muted", detail)}`);
+      }
+    }
+  }
+  lines.push(formatResultLine({ ...details.master, agent: "master" }, theme, expanded ? 220 : 110));
+  if (expanded) {
+    for (const detail of buildSubagentExpandedLines({ label: "master", result: details.master }, { stdoutLines: 3, stderrLines: 2 })) {
+      lines.push(`  ${theme.fg("muted", detail)}`);
+    }
+  }
   return new Text(lines.join("\n"), 0, 0);
 }
 
@@ -3402,30 +3483,18 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setEditorText(`${latestSubagentActivity.title}${latestSubagentActivity.subtitle ? ` — ${latestSubagentActivity.subtitle}` : ""}\n\n${summary}`);
       return;
     }
-    const items = latestSubagentActivity.entries.map((entry, index) => ({
-      value: String(index),
-      label: entry.label,
-      description: buildSubagentActivityPreview(entry.result),
-    }));
-    const selected = await showPantheonSelect(ctx, "Subagent activity", items, "↑↓ navigate • enter inspect • esc cancel");
-    if (selected == null) return;
-    const entry = latestSubagentActivity.entries[Number(selected)];
+
+    const selection = await showPantheonSubagentInspector(
+      ctx,
+      () => buildSubagentInspectorSnapshot(latestSubagentActivity),
+    );
+    if (!selection) return;
+    const entry = latestSubagentActivity.entries[selection.index];
     if (!entry) {
-      ctx.ui.notify(`No subagent entry found: ${selected}`, "error");
+      ctx.ui.notify(`No subagent entry found: ${selection.index}.`, "error");
       return;
     }
-    const nextItems = [
-      { value: "details", label: "Open details", description: "Combined summary with capped previews for summary/stdout/stderr." },
-      { value: "summary", label: "Open summary JSON preview", description: buildDebugArtifactDescription(entry.result.debugSummaryPath, { maxBytes: SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES, missingDescription: "summary.json not available" }) },
-      { value: "stdout", label: "Open stdout tail", description: buildDebugArtifactDescription(entry.result.debugStdoutPath, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail", missingDescription: "stdout log not available" }) },
-      { value: "stderr", label: "Open stderr tail", description: entry.result.debugStderrPath
-        ? buildDebugArtifactDescription(entry.result.debugStderrPath, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail", missingDescription: "stderr log not available" })
-        : (entry.result.stderr ? `inline stderr • ${formatByteSize(Buffer.byteLength(entry.result.stderr, "utf8"))}` : "stderr log not available") },
-      { value: "paths", label: "Open artifact paths", description: "Show debug dir and summary/stdout/stderr file paths for manual inspection." },
-      ...(entry.result.debugTraceId ? [{ value: "trace", label: "Open full trace", description: `Jump to trace ${entry.result.debugTraceId}.` }] : []),
-    ];
-    const action = await showPantheonSelect(ctx, `Subagent · ${entry.label}`, nextItems);
-    if (!action) return;
+    const action = selection.action;
     if (action === "trace" && entry.result.debugTraceId) {
       await handlePantheonDebugCommand(entry.result.debugTraceId, ctx, { localOnly: true });
       return;
@@ -3584,11 +3653,14 @@ export default function (pi: ExtensionAPI) {
         latestConfig = configResult.config;
         latestWarningCount = configResult.warnings.length;
         updatePantheonDashboard(ctx, configResult.config);
-        presentPantheonCommandEditorOutput("/pantheon-config", buildConfigReport(configResult), ctx, {
-          summary: configResult.warnings.length > 0 ? `Config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}` : "Config report",
+        const summary = configResult.warnings.length > 0 ? `Config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}` : "Config report";
+        const report = buildConfigReport(configResult);
+        presentPantheonCommandEditorOutput("/pantheon-config", report, ctx, {
+          summary,
           notifyMessage: configResult.warnings.length > 0 ? `Loaded config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}.` : "Loaded config report into editor.",
           status: configResult.warnings.length > 0 ? "warning" : "success",
         });
+        await showPantheonReportModal(ctx, "Config report", summary, report);
         return;
       }
 
@@ -3643,11 +3715,14 @@ export default function (pi: ExtensionAPI) {
       latestConfig = configResult.config;
       latestWarningCount = configResult.warnings.length;
       updatePantheonDashboard(ctx, configResult.config);
-      presentPantheonCommandEditorOutput("/pantheon-config", buildConfigReport(configResult), ctx, {
-        summary: configResult.warnings.length > 0 ? `Config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}` : "Config report",
+      const summary = configResult.warnings.length > 0 ? `Config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}` : "Config report";
+      const report = buildConfigReport(configResult);
+      presentPantheonCommandEditorOutput("/pantheon-config", report, ctx, {
+        summary,
         notifyMessage: configResult.warnings.length > 0 ? `Loaded config report with ${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"}.` : "Loaded config report into editor.",
         status: configResult.warnings.length > 0 ? "warning" : "success",
       });
+      await showPantheonReportModal(ctx, "Config report", summary, report);
     },
   });
 
@@ -5227,7 +5302,10 @@ export default function (pi: ExtensionAPI) {
             entries: [{ label: current.agent, result: current }],
           });
         }
-        onUpdate?.(partial);
+        onUpdate?.({
+          content: partial.content,
+          details: details("single", current ? [current] : []),
+        });
       }, undefined, debugTrace, `single-${agent.name}`);
       const isError = !isSuccessfulResult(result, { allowEmpty: config.fallback?.retryOnEmpty === false });
       updateDebugTraceSummary(debugTrace, { finishedAt: Date.now(), status: isError ? "error" : "completed", mode: "single", results: [result] });

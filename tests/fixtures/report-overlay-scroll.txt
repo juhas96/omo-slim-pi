@@ -1,0 +1,17 @@
+[selectedBg]<text> **Pantheon** · Config report </text>[/selectedBg]
+<accent>**Long config report**</accent>
+<dim>Local modal view active. The full report is also loaded in the editor.</dim>
+<dim>Showing lines 6-13 of 24</dim>
+<dim>↑ 5 earlier lines</dim>
+
+Line 6
+Line 7
+Line 8
+Line 9
+Line 10
+Line 11
+Line 12
+Line 13
+<dim>↓ 11 more lines</dim>
+
+[toolPendingBg]<text> ↑↓ / j k / Home End scroll • Enter or Esc close • Full report stays in the editor. </text>[/toolPendingBg]

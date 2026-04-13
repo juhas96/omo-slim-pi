@@ -36,6 +36,7 @@ Related command surfaces:
 - `/pantheon-watch <taskId>` — watch view
 - `/pantheon-result <taskId>` — result view
 - `/pantheon-task-actions <taskId>` — interactive retry/cancel/log/result/watch/attach menu
+- `/pantheon-subagents` — live subagent inspector with per-agent expand/collapse plus quick actions for details, stdout, stderr, paths, and traces
 - `/pantheon-doctor` — health-check report across config, adapters, tmux, and background storage
 
 ## Repo mapping and structural understanding

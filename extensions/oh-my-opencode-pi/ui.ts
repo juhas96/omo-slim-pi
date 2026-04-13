@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { Box, Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
+import { Box, Container, matchesKey, type SelectItem, SelectList, Spacer, Text } from "@mariozechner/pi-tui";
 import { getBackgroundStatusCounts, isTaskStale } from "./background.js";
 import type { PantheonConfig } from "./config.js";
 import type { BackgroundTaskRecord } from "./types.js";
@@ -275,6 +275,293 @@ export function buildPantheonDashboardLines(
   return lines;
 }
 
+export function buildPantheonSelectChromeLines(
+  theme: { fg: RenderTheme["fg"]; bold: RenderTheme["bold"]; bg: (color: any, text: string) => string },
+  title: string,
+  hint: string,
+): string[] {
+  return [
+    theme.bg("selectedBg", theme.fg("text", ` ${theme.bold("Pantheon")} · ${title} `)),
+    theme.fg("warning", theme.bold("Interactive selector active")),
+    theme.fg("dim", "The workspace is paused until you choose an option or cancel."),
+    theme.bg("toolPendingBg", theme.fg("text", ` ${hint} `)),
+  ];
+}
+
+export function buildPantheonReportModalLines(
+  theme: { fg: RenderTheme["fg"]; bold: RenderTheme["bold"]; bg: (color: any, text: string) => string },
+  title: string,
+  summary: string,
+  body: string,
+  hint = "↑↓ / j k / Home End scroll • Enter or Esc close • Full report stays in the editor.",
+  startLine = 0,
+  maxBodyLines = 18,
+): string[] {
+  const bodyLines = body.trim().split(/\r?\n/);
+  const clampedStart = Math.max(0, Math.min(startLine, Math.max(0, bodyLines.length - 1)));
+  const visible = bodyLines.slice(clampedStart, clampedStart + maxBodyLines).map((line) => line.length > 0 ? line : " ");
+  const endLine = Math.min(bodyLines.length, clampedStart + visible.length);
+  const hiddenAbove = clampedStart;
+  const hiddenBelow = Math.max(0, bodyLines.length - endLine);
+  const scrollSummary = bodyLines.length > maxBodyLines
+    ? `Showing lines ${clampedStart + 1}-${endLine} of ${bodyLines.length}`
+    : `Showing all ${bodyLines.length} line${bodyLines.length === 1 ? "" : "s"}`;
+  return [
+    theme.bg("selectedBg", theme.fg("text", ` ${theme.bold("Pantheon")} · ${title} `)),
+    theme.fg("accent", theme.bold(summary.trim() || "Report")),
+    theme.fg("dim", "Local modal view active. The full report is also loaded in the editor."),
+    theme.fg("dim", scrollSummary),
+    ...(hiddenAbove > 0 ? [theme.fg("dim", `↑ ${hiddenAbove} earlier line${hiddenAbove === 1 ? "" : "s"}`)] : []),
+    "",
+    ...visible,
+    ...(hiddenBelow > 0 ? [theme.fg("dim", `↓ ${hiddenBelow} more line${hiddenBelow === 1 ? "" : "s"}`)] : []),
+    "",
+    theme.bg("toolPendingBg", theme.fg("text", ` ${hint} `)),
+  ];
+}
+
+export async function showPantheonReportModal(
+  ctx: ExtensionContext,
+  title: string,
+  summary: string,
+  body: string,
+  hint = "↑↓ / j k / Home End scroll • Enter or Esc close • Full report stays in the editor.",
+): Promise<void> {
+  if (!ctx.hasUI) return;
+  await ctx.ui.custom<void>((tui, theme, _kb, done) => {
+    const container = new Container();
+    const panel = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+    const bodyText = new Text("", 0, 0);
+    const bodyLines = body.trim().split(/\r?\n/);
+    const maxBodyLines = 18;
+    let startLine = 0;
+    const maxStartLine = Math.max(0, bodyLines.length - maxBodyLines);
+
+    container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+    panel.addChild(bodyText);
+    container.addChild(panel);
+    container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+
+    return {
+      render(width: number) {
+        bodyText.setText(buildPantheonReportModalLines(theme, title, summary, body, hint, startLine, maxBodyLines).join("\n"));
+        return container.render(width);
+      },
+      invalidate() {
+        container.invalidate();
+      },
+      handleInput(data: string) {
+        if (matchesKey(data, "escape") || matchesKey(data, "return") || matchesKey(data, "space")) {
+          done();
+          return;
+        }
+        if (matchesKey(data, "up") || data === "k") {
+          startLine = Math.max(0, startLine - 1);
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "down") || data === "j") {
+          startLine = Math.min(maxStartLine, startLine + 1);
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "home")) {
+          startLine = 0;
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "end")) {
+          startLine = maxStartLine;
+          tui.requestRender();
+        }
+      },
+    };
+  }, {
+    overlay: true,
+    overlayOptions: {
+      anchor: "center",
+      width: "74%",
+      minWidth: 60,
+      maxHeight: "78%",
+      margin: 2,
+    },
+  });
+}
+
+export interface PantheonSubagentInspectorEntry {
+  label: string;
+  description: string;
+  expandedLines: string[];
+  traceAvailable?: boolean;
+}
+
+export interface PantheonSubagentInspectorSnapshot {
+  title: string;
+  subtitle?: string;
+  entries: PantheonSubagentInspectorEntry[];
+}
+
+export interface PantheonSubagentInspectorAction {
+  action: "details" | "summary" | "stdout" | "stderr" | "paths" | "trace";
+  index: number;
+}
+
+export function buildPantheonSubagentInspectorLines(
+  theme: { fg: RenderTheme["fg"]; bold: RenderTheme["bold"]; bg: (color: any, text: string) => string },
+  snapshot: PantheonSubagentInspectorSnapshot,
+  expandedEntries: Iterable<number>,
+  selectedIndex: number,
+  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l stdout • e stderr • p paths • t trace • Esc close",
+  maxBodyLines = 18,
+): string[] {
+  const expandedSet = new Set(expandedEntries);
+  const bodyLines: string[] = [];
+  const headerLineIndexes: number[] = [];
+
+  snapshot.entries.forEach((entry, index) => {
+    headerLineIndexes[index] = bodyLines.length;
+    const marker = expandedSet.has(index) ? "▼" : "▶";
+    const header = `${marker} ${entry.label} — ${previewText(entry.description, 104)}`;
+    bodyLines.push(
+      index === selectedIndex
+        ? theme.bg("selectedBg", theme.fg("text", ` ${header} `))
+        : `${theme.fg("accent", `${marker} ${entry.label}`)} ${theme.fg("muted", "—")} ${theme.fg("muted", previewText(entry.description, 104))}`,
+    );
+    if (expandedSet.has(index)) {
+      const detailLines = entry.expandedLines.length > 0 ? entry.expandedLines : ["(no live detail available)"];
+      for (const line of detailLines) bodyLines.push(`  ${line}`);
+    }
+  });
+
+  const safeSelectedIndex = Math.max(0, Math.min(selectedIndex, Math.max(0, snapshot.entries.length - 1)));
+  const selectedLine = headerLineIndexes[safeSelectedIndex] ?? 0;
+  const totalBodyLines = bodyLines.length;
+  const visibleCount = Math.max(8, maxBodyLines);
+  const maxStartLine = Math.max(0, totalBodyLines - visibleCount);
+  const startLine = Math.max(0, Math.min(maxStartLine, selectedLine - Math.floor(visibleCount / 3)));
+  const visible = bodyLines.slice(startLine, startLine + visibleCount);
+  const endLine = Math.min(totalBodyLines, startLine + visible.length);
+  const hiddenAbove = startLine;
+  const hiddenBelow = Math.max(0, totalBodyLines - endLine);
+  const scrollSummary = totalBodyLines > visibleCount
+    ? `Showing lines ${startLine + 1}-${endLine} of ${totalBodyLines}`
+    : `Showing all ${totalBodyLines} line${totalBodyLines === 1 ? "" : "s"}`;
+  const expandedCount = Array.from(expandedSet).filter((index) => index >= 0 && index < snapshot.entries.length).length;
+  const selected = snapshot.entries[safeSelectedIndex];
+  const inspectorSummary = `${snapshot.entries.length} subagent${snapshot.entries.length === 1 ? "" : "s"} • ${expandedCount} expanded${selected ? ` • selected ${selected.label}` : ""}`;
+
+  return [
+    theme.bg("selectedBg", theme.fg("text", ` ${theme.bold("Pantheon")} · ${snapshot.title} `)),
+    theme.fg("accent", theme.bold(snapshot.subtitle?.trim() || inspectorSummary)),
+    theme.fg("dim", "Live subagent inspector. The view refreshes while delegate/council work is still running."),
+    theme.fg("dim", scrollSummary),
+    ...(hiddenAbove > 0 ? [theme.fg("dim", `↑ ${hiddenAbove} earlier line${hiddenAbove === 1 ? "" : "s"}`)] : []),
+    "",
+    ...visible,
+    ...(hiddenBelow > 0 ? [theme.fg("dim", `↓ ${hiddenBelow} more line${hiddenBelow === 1 ? "" : "s"}`)] : []),
+    "",
+    theme.bg("toolPendingBg", theme.fg("text", ` ${hint} `)),
+  ];
+}
+
+export async function showPantheonSubagentInspector(
+  ctx: ExtensionContext,
+  getSnapshot: () => PantheonSubagentInspectorSnapshot | undefined,
+  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l stdout • e stderr • p paths • t trace • Esc close",
+): Promise<PantheonSubagentInspectorAction | null> {
+  if (!ctx.hasUI) return null;
+  return ctx.ui.custom<PantheonSubagentInspectorAction | null>((tui, theme, _kb, done) => {
+    const container = new Container();
+    const panel = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+    const bodyText = new Text("", 0, 0);
+    let selectedIndex = 0;
+    const expandedEntries = new Set<number>();
+    let refreshInterval: ReturnType<typeof setInterval> | undefined;
+    let closed = false;
+
+    const close = (value: PantheonSubagentInspectorAction | null) => {
+      if (closed) return;
+      closed = true;
+      if (refreshInterval) clearInterval(refreshInterval);
+      done(value);
+    };
+
+    const currentSnapshot = () => getSnapshot() ?? { title: "Pantheon subagents", entries: [] };
+    refreshInterval = setInterval(() => {
+      if (!closed) tui.requestRender();
+    }, 500);
+
+    container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+    panel.addChild(bodyText);
+    container.addChild(panel);
+    container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+
+    return {
+      render(width: number) {
+        const snapshot = currentSnapshot();
+        selectedIndex = Math.max(0, Math.min(selectedIndex, Math.max(0, snapshot.entries.length - 1)));
+        bodyText.setText(buildPantheonSubagentInspectorLines(theme, snapshot, expandedEntries, selectedIndex, hint).join("\n"));
+        return container.render(width);
+      },
+      invalidate() {
+        container.invalidate();
+      },
+      handleInput(data: string) {
+        const snapshot = currentSnapshot();
+        if (matchesKey(data, "escape") || data === "q") {
+          close(null);
+          return;
+        }
+        if (snapshot.entries.length === 0) {
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "up") || data === "k") {
+          selectedIndex = Math.max(0, selectedIndex - 1);
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "down") || data === "j") {
+          selectedIndex = Math.min(snapshot.entries.length - 1, selectedIndex + 1);
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "home")) {
+          selectedIndex = 0;
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "end")) {
+          selectedIndex = Math.max(0, snapshot.entries.length - 1);
+          tui.requestRender();
+          return;
+        }
+        if (matchesKey(data, "return") || matchesKey(data, "space")) {
+          if (expandedEntries.has(selectedIndex)) expandedEntries.delete(selectedIndex);
+          else expandedEntries.add(selectedIndex);
+          tui.requestRender();
+          return;
+        }
+        if (data === "o") return close({ action: "details", index: selectedIndex });
+        if (data === "s") return close({ action: "summary", index: selectedIndex });
+        if (data === "l") return close({ action: "stdout", index: selectedIndex });
+        if (data === "e") return close({ action: "stderr", index: selectedIndex });
+        if (data === "p") return close({ action: "paths", index: selectedIndex });
+        if (data === "t" && snapshot.entries[selectedIndex]?.traceAvailable) return close({ action: "trace", index: selectedIndex });
+      },
+    };
+  }, {
+    overlay: true,
+    overlayOptions: {
+      anchor: "center",
+      width: "78%",
+      minWidth: 64,
+      maxHeight: "82%",
+      margin: 2,
+    },
+  });
+}
+
 export async function showPantheonSelect(
   ctx: ExtensionContext,
   title: string,
@@ -283,21 +570,29 @@ export async function showPantheonSelect(
 ): Promise<string | null> {
   if (!ctx.hasUI) return null;
   return ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
+    const [titleLine, statusLine, contextLine, hintLine] = buildPantheonSelectChromeLines(theme, title, hint);
     const container = new Container();
+    const panel = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+
     container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-    container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+    panel.addChild(new Text(titleLine, 0, 0));
+    panel.addChild(new Text(statusLine, 0, 0));
+    panel.addChild(new Text(contextLine, 0, 0));
+    panel.addChild(new Spacer(1));
 
     const selectList = new SelectList(items, Math.min(Math.max(items.length, 3), 12), {
-      selectedPrefix: (text) => theme.fg("accent", text),
-      selectedText: (text) => theme.fg("accent", text),
+      selectedPrefix: (text) => theme.bg("selectedBg", theme.fg("text", text)),
+      selectedText: (text) => theme.bg("selectedBg", theme.fg("text", text)),
       description: (text) => theme.fg("muted", text),
       scrollInfo: (text) => theme.fg("dim", text),
       noMatch: (text) => theme.fg("warning", text),
     });
     selectList.onSelect = (item) => done(String(item.value));
     selectList.onCancel = () => done(null);
-    container.addChild(selectList);
-    container.addChild(new Text(theme.fg("dim", hint), 1, 0));
+    panel.addChild(selectList);
+    panel.addChild(new Spacer(1));
+    panel.addChild(new Text(hintLine, 0, 0));
+    container.addChild(panel);
     container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
 
     return {
@@ -315,10 +610,11 @@ export async function showPantheonSelect(
   }, {
     overlay: true,
     overlayOptions: {
-      width: "72%",
-      minWidth: 52,
-      maxHeight: "80%",
-      margin: 1,
+      anchor: "center",
+      width: "68%",
+      minWidth: 58,
+      maxHeight: "72%",
+      margin: 2,
     },
   });
 }

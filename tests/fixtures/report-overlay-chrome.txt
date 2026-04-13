@@ -1,0 +1,11 @@
+[selectedBg]<text> **Pantheon** · Config report </text>[/selectedBg]
+<accent>**Config report with 2 warnings**</accent>
+<dim>Local modal view active. The full report is also loaded in the editor.</dim>
+<dim>Showing all 4 lines</dim>
+
+Pantheon config report
+ 
+Line A
+Line B
+
+[toolPendingBg]<text> Enter or Esc closes this modal. Full report stays in the editor. </text>[/toolPendingBg]

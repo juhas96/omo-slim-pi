@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { renderBackgroundResult, renderBackgroundWatch } from "../extensions/oh-my-opencode-pi/background.ts";
 import { buildConfigReport, buildAdapterPolicyReport, buildDoctorReport } from "../extensions/oh-my-opencode-pi/reports.ts";
-import { buildPantheonCommandOutputLines, buildPantheonDashboardLines } from "../extensions/oh-my-opencode-pi/ui.ts";
+import { buildPantheonCommandOutputLines, buildPantheonDashboardLines, buildPantheonReportModalLines, buildPantheonSelectChromeLines, buildPantheonSubagentInspectorLines } from "../extensions/oh-my-opencode-pi/ui.ts";
 
 function fixture(name: string): string {
   return fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", name), "utf8");
@@ -32,6 +32,27 @@ test("Pantheon UI renderers match approval fixtures", () => {
     }).join("\n");
     assert.equal(commandOutput, fixture("command-output-widget.txt"));
 
+    const selectChrome = buildPantheonSelectChromeLines({
+      fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+      bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
+      bold: (text: string) => `**${text}**`,
+    }, "Council preset", "↑↓ navigate • enter select • esc cancel").join("\n");
+    assert.equal(selectChrome, fixture("select-overlay-chrome.txt"));
+
+    const reportModal = buildPantheonReportModalLines({
+      fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+      bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
+      bold: (text: string) => `**${text}**`,
+    }, "Config report", "Config report with 2 warnings", "Pantheon config report\n\nLine A\nLine B", "Enter or Esc closes this modal. Full report stays in the editor.").join("\n");
+    assert.equal(reportModal, fixture("report-overlay-chrome.txt"));
+
+    const scrollableReportModal = buildPantheonReportModalLines({
+      fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+      bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
+      bold: (text: string) => `**${text}**`,
+    }, "Config report", "Long config report", Array.from({ length: 24 }, (_, index) => `Line ${index + 1}`).join("\n"), "↑↓ / j k / Home End scroll • Enter or Esc close • Full report stays in the editor.", 5, 8).join("\n");
+    assert.equal(scrollableReportModal, fixture("report-overlay-scroll.txt"));
+
     const dashboard = buildPantheonDashboardLines(
       ctx,
       { ui: { maxTodos: 2, maxBackgroundTasks: 2 } },
@@ -45,6 +66,38 @@ test("Pantheon UI renderers match approval fixtures", () => {
       2,
     ).join("\n");
     assert.equal(dashboard, fixture("dashboard-widget.txt"));
+
+    const subagentInspector = buildPantheonSubagentInspectorLines({
+      fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+      bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
+      bold: (text: string) => `**${text}**`,
+    }, {
+      title: "Pantheon subagents",
+      subtitle: "delegate parallel (1/2 done)",
+      entries: [
+        {
+          label: "explorer",
+          description: "Mapped entrypoints and import graph (1.2s)",
+          expandedLines: [
+            "task: Analyze the repo",
+            "status: completed • 1.2s",
+            "summary: Mapped entrypoints and import graph",
+            "stdout: Found index.ts and ui.ts",
+          ],
+          traceAvailable: true,
+        },
+        {
+          label: "librarian",
+          description: "Reading docs… (0.6s)",
+          expandedLines: [
+            "task: Research the package",
+            "status: running • 0.6s",
+            "summary: waiting for output…",
+          ],
+        },
+      ],
+    }, [0], 0, "↑↓ move • Enter expand • Esc close", 10).join("\n");
+    assert.equal(subagentInspector, fixture("subagent-inspector.txt"));
 
     const task = {
       id: "bg-42",

@@ -332,6 +332,7 @@ test("pantheon-config keeps the structured config report out of chat", async () 
 
   const editorWrites: string[] = [];
   const widgetWrites: string[][] = [];
+  let customCalls = 0;
   await pantheonConfig.handler("", {
     cwd: projectDir,
     hasUI: true,
@@ -345,7 +346,10 @@ test("pantheon-config keeps the structured config report out of chat", async () 
         if (Array.isArray(lines)) widgetWrites.push(lines);
       },
       input: async () => "",
-      custom: async () => null,
+      custom: async () => {
+        customCalls++;
+        return null;
+      },
     },
   });
 
@@ -355,6 +359,7 @@ test("pantheon-config keeps the structured config report out of chat", async () 
   assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-config/);
+  assert.equal(customCalls, 1);
 });
 
 test("pantheon-adapters keeps the adapter policy report out of chat", async () => {

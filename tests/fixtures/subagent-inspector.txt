@@ -1,0 +1,13 @@
+[selectedBg]<text> **Pantheon** · Pantheon subagents </text>[/selectedBg]
+<accent>**delegate parallel (1/2 done)**</accent>
+<dim>Live subagent inspector. The view refreshes while delegate/council work is still running.</dim>
+<dim>Showing all 6 lines</dim>
+
+[selectedBg]<text> ▼ explorer — Mapped entrypoints and import graph (1.2s) </text>[/selectedBg]
+  task: Analyze the repo
+  status: completed • 1.2s
+  summary: Mapped entrypoints and import graph
+  stdout: Found index.ts and ui.ts
+<accent>▶ librarian</accent> <muted>—</muted> <muted>Reading docs… (0.6s)</muted>
+
+[toolPendingBg]<text> ↑↓ move • Enter expand • Esc close </text>[/toolPendingBg]

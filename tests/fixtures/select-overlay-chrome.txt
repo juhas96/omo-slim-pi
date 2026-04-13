@@ -1,0 +1,4 @@
+[selectedBg]<text> **Pantheon** · Council preset </text>[/selectedBg]
+<warning>**Interactive selector active**</warning>
+<dim>The workspace is paused until you choose an option or cancel.</dim>
+[toolPendingBg]<text> ↑↓ navigate • enter select • esc cancel </text>[/toolPendingBg]

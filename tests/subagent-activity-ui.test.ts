@@ -266,13 +266,12 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
     assert.ok(stdoutPath);
     fs.writeFileSync(stdoutPath!, `header\n${"chunk-".repeat(12_000)}`, "utf8");
 
-    let customCalls = 0;
     await pantheonSubagents.handler("", {
       cwd: projectDir,
       hasUI: true,
       ui: {
         theme: fakeTheme(),
-        custom: async () => (++customCalls === 1 ? "0" : "details"),
+        custom: async () => ({ action: "details", index: 0 }),
         setWidget() {},
         setEditorText(text: string) {
           editorWrites.push(text);
@@ -287,13 +286,12 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
     assert.match(editorWrites[0] ?? "", /truncated: showing last/i);
     assert.ok((editorWrites[0] ?? "").length < 80_000);
 
-    customCalls = 0;
     await pantheonSubagents.handler("", {
       cwd: projectDir,
       hasUI: true,
       ui: {
         theme: fakeTheme(),
-        custom: async () => (++customCalls === 1 ? "0" : "paths"),
+        custom: async () => ({ action: "paths", index: 0 }),
         setWidget() {},
         setEditorText(text: string) {
           editorWrites.push(text);
@@ -306,13 +304,12 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
     assert.match(editorWrites[1] ?? "", /Debug dir:/);
     assert.match(editorWrites[1] ?? "", /Stdout:/);
 
-    customCalls = 0;
     await pantheonSubagents.handler("", {
       cwd: projectDir,
       hasUI: true,
       ui: {
         theme: fakeTheme(),
-        custom: async () => (++customCalls === 1 ? "0" : "trace"),
+        custom: async () => ({ action: "trace", index: 0 }),
         setWidget() {},
         setEditorText(text: string) {
           editorWrites.push(text);

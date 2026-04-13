@@ -10,7 +10,7 @@ Widget updates:
 5. /pantheon-council … running | Council preset default is running (update 2) | detail: Council (default): 2/3 councillors responded...
 6. Pantheon subagents • council default · councillors | 0/3 ready
 7. /pantheon-council … running | Council preset default is running (update 3) | detail: Council (default): 3/3 councillors responded...
-8. Pantheon subagents • council default · master | … master — master-synthesis: proceed with guardrails (<elapsed>)
+8. Pantheon subagents • council default · master | … master — master-synthesis: proceed with guardrails (<elapsed>) | Inspect live detail: /pantheon-subagents
 9. /pantheon-council … running | Council preset default is running (update 4) | detail: master-synthesis: proceed with guardrails
 10. Pantheon subagents • council default | 4/4 finished
 11. /pantheon-council ✓ ready | Council completed with preset default. | detail: master-synthesis: proceed with guardrails
