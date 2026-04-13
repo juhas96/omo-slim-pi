@@ -520,6 +520,88 @@ function collectPreviewLines(text: string, maxLines: number, mode: "head" | "tai
   return mode === "head" ? lines.slice(0, maxLines) : lines.slice(-maxLines);
 }
 
+function appendParsedOutputChunk(chunks: string[], text: string | undefined): void {
+  const clean = text?.trim();
+  if (!clean) return;
+  if (chunks[chunks.length - 1]?.trim() === clean) return;
+  chunks.push(clean);
+}
+
+function extractStreamTextCandidate(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const textValue = (value as { text?: unknown }).text;
+  return typeof textValue === "string" ? textValue : "";
+}
+
+function extractParsedOutputFromEvent(event: any): { chunks: string[]; streamText?: string; clearStream?: boolean } {
+  const chunks: string[] = [];
+
+  if (event?.type === "message_end" && event.message) {
+    appendParsedOutputChunk(chunks, extractTextFromMessage(event.message as Message));
+    return { chunks, clearStream: true };
+  }
+
+  if (event?.type === "tool_result_end" && event.message) {
+    appendParsedOutputChunk(chunks, extractTextFromMessage(event.message as Message));
+    return { chunks };
+  }
+
+  if (event?.type === "content_block_start") {
+    const text = extractStreamTextCandidate(event.contentBlock ?? event.content_block ?? event.block);
+    return text ? { chunks, streamText: text } : { chunks };
+  }
+
+  if (event?.type === "content_block_delta" || event?.type === "message_delta") {
+    const delta = event.delta ?? event.message?.delta ?? event.contentBlockDelta;
+    const text = extractStreamTextCandidate(delta);
+    return text ? { chunks, streamText: text } : { chunks };
+  }
+
+  return { chunks };
+}
+
+function parseSubagentOutputPreview(raw: string): string {
+  const lines = raw.split(/\r?\n/);
+  const prefix: string[] = [];
+  let streamText = "";
+  const chunks: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("[truncated:")) {
+      prefix.push(trimmed);
+      continue;
+    }
+
+    let event: any;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    const parsed = extractParsedOutputFromEvent(event);
+    if (parsed.streamText) streamText += parsed.streamText;
+    for (const chunk of parsed.chunks) appendParsedOutputChunk(chunks, chunk);
+    if (parsed.clearStream) streamText = "";
+  }
+
+  appendParsedOutputChunk(chunks, streamText);
+  return [...prefix, ...chunks].join("\n\n").trim();
+}
+
+function readSubagentOutputPreview(
+  result: SingleResult,
+  fallback: string,
+  options?: { maxBytes?: number; mode?: "head" | "tail" },
+): string {
+  if (!result.debugStdoutPath) return fallback;
+  const rawPreview = readDebugArtifactPreview(result.debugStdoutPath, "", options);
+  const parsedPreview = parseSubagentOutputPreview(rawPreview);
+  return parsedPreview || fallback;
+}
+
 function buildSubagentExpandedLines(entry: { label: string; result: SingleResult }, options?: { stdoutLines?: number; stderrLines?: number }): string[] {
   const result = entry.result;
   const statusParts = [getSubagentStatusLabel(result)];
@@ -527,17 +609,20 @@ function buildSubagentExpandedLines(entry: { label: string; result: SingleResult
   const duration = formatElapsed(result.durationMs ?? (typeof result.startedAt === "number" && result.exitCode === -1 ? Date.now() - result.startedAt : undefined));
   if (duration) statusParts.push(duration);
 
+  const summary = summarizeResult(result);
   const lines = [
     `task: ${previewText(result.task, 140)}`,
     `status: ${statusParts.join(" • ")}`,
-    `summary: ${previewText(summarizeResult(result), 180)}`,
+    `summary: ${previewText(summary, 180)}`,
   ];
 
-  if (result.debugStdoutPath) {
-    const stdoutPreview = readDebugArtifactPreview(result.debugStdoutPath, "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" });
-    const stdoutLines = collectPreviewLines(stdoutPreview, Math.max(2, options?.stdoutLines ?? 4));
-    if (stdoutLines.length > 0) lines.push(`stdout: ${stdoutLines.join(" ⏎ ")}`);
-  }
+  const outputPreview = readSubagentOutputPreview(
+    result,
+    result.exitCode === -1 && summary === "(no output)" ? "waiting for output…" : summary,
+    { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" },
+  );
+  const outputLines = collectPreviewLines(outputPreview, Math.max(2, options?.stdoutLines ?? 4));
+  if (outputLines.length > 0) lines.push(`output: ${outputLines.join(" ⏎ ")}`);
 
   const stderrText = result.debugStderrPath
     ? readDebugArtifactPreview(result.debugStderrPath, result.stderr || "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })
@@ -662,6 +747,25 @@ function buildSubagentArtifactText(
   ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
+function buildSubagentOutputText(
+  entry: { label: string; result: SingleResult },
+  options?: { maxBytes?: number; mode?: "head" | "tail" },
+): string {
+  const summary = summarizeResult(entry.result);
+  return [
+    `Subagent: ${entry.label}`,
+    "Artifact: Output",
+    entry.result.debugStdoutPath ? `Path: ${entry.result.debugStdoutPath}` : undefined,
+    `Preview: ${buildDebugArtifactDescription(entry.result.debugStdoutPath, options)}`,
+    "",
+    readSubagentOutputPreview(
+      entry.result,
+      entry.result.exitCode === -1 && summary === "(no output)" ? "waiting for output…" : summary,
+      options,
+    ),
+  ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
 function buildSubagentPathsText(entry: { label: string; result: SingleResult }): string {
   const result = entry.result;
   return [
@@ -677,6 +781,7 @@ function buildSubagentPathsText(entry: { label: string; result: SingleResult }):
 
 function buildSubagentDetailText(entry: { label: string; result: SingleResult }): string {
   const result = entry.result;
+  const summary = summarizeResult(result);
   return [
     `Subagent: ${entry.label}`,
     `Agent: ${result.agent}`,
@@ -693,13 +798,10 @@ function buildSubagentDetailText(entry: { label: string; result: SingleResult })
     `Task: ${result.task}`,
     "",
     "Summary:",
-    summarizeResult(result),
+    summary,
     "",
-    "Summary JSON:",
-    readDebugArtifactPreview(result.debugSummaryPath, "(no summary file)", { maxBytes: SUBAGENT_DETAIL_SUMMARY_PREVIEW_BYTES }),
-    "",
-    "Stdout:",
-    readDebugArtifactPreview(result.debugStdoutPath, "(no stdout log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }),
+    "Output:",
+    readSubagentOutputPreview(result, result.exitCode === -1 && summary === "(no output)" ? "waiting for output…" : summary, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }),
     "",
     "Stderr:",
     result.debugStderrPath
@@ -3473,8 +3575,8 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     if (action === "stdout") {
-      ctx.ui.setEditorText(buildSubagentArtifactText(entry, "Stdout", entry.result.debugStdoutPath, "(no stdout log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }));
-      ctx.ui.notify(`Loaded stdout tail for ${entry.label}.`, "info");
+      ctx.ui.setEditorText(buildSubagentOutputText(entry, { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }));
+      ctx.ui.notify(`Loaded output preview for ${entry.label}.`, "info");
       return;
     }
     if (action === "stderr") {
@@ -3530,40 +3632,56 @@ export default function (pi: ExtensionAPI) {
       const staleAfterMs = configResult.config.background?.staleAfterMs ?? 20000;
       const failedTask = tasks.find((task) => task.status === "failed" || task.status === "cancelled" || isTaskStale(task, staleAfterMs));
       const activeTask = tasks.find((task) => task.status === "queued" || task.status === "running");
-      const action = await showPantheonSelect(ctx, "Pantheon — choose next move", [
+      const recommendedItems = [
         ...(failedTask ? [{ value: "task-actions", label: "Recommended · Recover failed background task", description: `${failedTask.id} — /pantheon-task-actions ${failedTask.id}` }] : []),
         ...(activeTask ? [{ value: "watch", label: "Recommended · Watch active background task", description: `${activeTask.id} — /pantheon-watch ${activeTask.id}` }] : []),
         ...(workflowState.uncheckedTodos.length > 0 ? [{ value: "resume", label: "Recommended · Resume prior work", description: `${workflowState.uncheckedTodos.length} persisted todo${workflowState.uncheckedTodos.length === 1 ? "" : "s"} — /pantheon-resume` }] : []),
-        ...(configResult.warnings.length > 0 ? [{ value: "warnings", label: "Recommended · Review config warnings", description: `${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"} — /pantheon-config` }] : []),
+        ...(configResult.warnings.length > 0 ? [{ value: "config", label: "Recommended · Review config warnings", description: `${configResult.warnings.length} warning${configResult.warnings.length === 1 ? "" : "s"} — /pantheon-config` }] : []),
+      ];
+      const recommendedValues = new Set(recommendedItems.map((item) => item.value));
+      let action = await showPantheonSelect(ctx, "Pantheon — choose next move", [
+        ...recommendedItems,
         { value: "delegate", label: "Start work · Delegate to specialist", description: "Route focused work to Explorer, Librarian, Oracle, Designer, or Fixer." },
         { value: "council", label: "Start work · Ask council", description: "Get multiple perspectives and a synthesized recommendation." },
-        { value: "spec-studio", label: "Start work · Open spec studio", description: "Create an editor-first brief for feature, refactor, investigation, or incident work." },
-        { value: "resume", label: "Start work · Resume prior work", description: "Build a re-entry brief from persisted todos and recent background tasks." },
-        { value: "overview", label: "Inspect · View workflow overview", description: "See workflow state and background task activity together." },
-        { value: "task-actions", label: "Inspect · Background task actions", description: "Choose watch, result, log, attach, cancel, or retry from one task menu." },
-        { value: "watch", label: "Inspect · /pantheon-watch", description: "Open live metadata plus a recent log tail for a detached task." },
-        { value: "result", label: "Inspect · /pantheon-result", description: "Open the latest result summary for a detached task." },
-        { value: "attach", label: "Inspect · /pantheon-attach", description: "Open or reopen a tmux pane for a running task log." },
-        { value: "attach-all", label: "Inspect · /pantheon-attach-all", description: "Open or reuse panes for all queued/running background tasks." },
-        { value: "todos", label: "Inspect · /pantheon-todos", description: "Review carried-over unchecked tasks from prior work." },
-        { value: "subagents", label: "Inspect · Subagent activity", description: "Inspect live/recent delegate or council subagent details and jump to full traces." },
-        { value: "debug", label: "Recover · Inspect debug trace", description: "Open recent foreground delegation/council traces and inspect why they failed." },
-        { value: "retry", label: "Recover · /pantheon-retry", description: "Requeue completed, failed, cancelled, or stale detached work." },
-        { value: "doctor", label: "Recover · Run doctor", description: "Check config, adapters, tmux, and background storage health." },
-        { value: "warnings", label: "Setup · Review config warnings", description: "Inspect config validation warnings and active presets." },
-        { value: "bootstrap", label: "Setup · Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
-        { value: "agents", label: "Setup · List agents", description: "Show bundled and override Pantheon specialists." },
-        { value: "skills", label: "Setup · Skills guidance", description: "Show skill policy guidance and a starter config snippet." },
-        { value: "adapter-health", label: "Setup · Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
-        { value: "stats", label: "Inspect · Stats", description: "Inspect Pantheon usage and reliability statistics." },
-        { value: "version", label: "Inspect · Package version", description: "Inspect the installed package version and cached update information." },
-        { value: "update-check", label: "Inspect · Refresh update check", description: "Force a fresh check for the latest published package version." },
-        { value: "hooks", label: "Inspect · Hook trace", description: "Inspect Pantheon orchestration middleware ordering and restored trace state." },
+        { value: "review", label: "Review · Review code changes", description: "Launch the structured diff review helper for local changes, commits, or pull requests." },
+        { value: "spec-studio", label: "Plan · Open spec studio", description: "Create an editor-first brief for feature, refactor, investigation, or incident work." },
+        ...(!recommendedValues.has("resume") ? [{ value: "resume", label: "Resume · Pick up prior work", description: "Build a re-entry brief from persisted todos and recent background tasks." }] : []),
+        ...(!recommendedValues.has("task-actions") ? [{ value: "task-actions", label: "Tasks · Inspect or recover background work", description: "Choose watch, result, log, attach, cancel, or retry from one task menu." }] : []),
+        { value: "doctor", label: "Troubleshoot · Run doctor", description: "Check config, adapters, tmux, and background storage health." },
+        { value: "advanced", label: "Advanced · More commands and diagnostics", description: "Open lower-frequency setup, inspection, and maintainer commands." },
       ]);
       if (!action) return;
 
+      if (action === "advanced") {
+        action = await showPantheonSelect(ctx, "Pantheon — advanced commands", [
+          { value: "config", label: "Config · Open config report", description: "Inspect merged config, validation warnings, and active presets." },
+          { value: "bootstrap", label: "Setup · Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
+          { value: "agents", label: "Setup · List agents", description: "Show bundled and override Pantheon specialists." },
+          { value: "skills", label: "Setup · Skills guidance", description: "Show skill policy guidance and a starter config snippet." },
+          { value: "adapter-health", label: "Setup · Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
+          { value: "overview", label: "Inspect · Workflow overview", description: "See workflow state and background task activity together." },
+          { value: "watch", label: "Inspect · Watch background task", description: "Open live metadata plus a recent log tail for a detached task." },
+          { value: "result", label: "Inspect · Background task result", description: "Open the latest result summary for a detached task." },
+          { value: "attach", label: "Inspect · Attach task pane", description: "Open or reopen a tmux pane for a running task log." },
+          { value: "attach-all", label: "Inspect · Attach all running tasks", description: "Open or reuse panes for all queued/running background tasks." },
+          { value: "todos", label: "Inspect · Persisted workflow todos", description: "Review carried-over unchecked tasks from prior work." },
+          { value: "subagents", label: "Inspect · Subagent activity", description: "Inspect live/recent delegate or council subagent details and jump to full traces." },
+          { value: "debug", label: "Recover · Inspect debug trace", description: "Open recent foreground delegation/council traces and inspect why they failed." },
+          { value: "retry", label: "Recover · Retry background task", description: "Requeue completed, failed, cancelled, or stale detached work." },
+          { value: "hooks", label: "Diagnostics · Hook trace", description: "Inspect Pantheon orchestration middleware ordering and restored trace state." },
+          { value: "stats", label: "Diagnostics · Stats", description: "Inspect Pantheon usage and reliability statistics." },
+          { value: "version", label: "Diagnostics · Package version", description: "Inspect the installed package version and cached update information." },
+          { value: "update-check", label: "Diagnostics · Refresh update check", description: "Force a fresh check for the latest published package version." },
+        ], "↑↓ navigate • enter select • esc back");
+        if (!action) return;
+      }
+
       if (action === "agents") {
         await handlePantheonAgentsCommand("", ctx);
+        return;
+      }
+      if (action === "review") {
+        await handleReviewCommand("", ctx);
         return;
       }
       if (action === "spec-studio") {
@@ -3619,7 +3737,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      if (action === "warnings") {
+      if (action === "config") {
         const configResult = loadPantheonConfig(ctx.cwd);
         latestConfig = configResult.config;
         latestWarningCount = configResult.warnings.length;

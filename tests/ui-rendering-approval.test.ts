@@ -82,7 +82,7 @@ test("Pantheon UI renderers match approval fixtures", () => {
             "task: Analyze the repo",
             "status: completed • 1.2s",
             "summary: Mapped entrypoints and import graph",
-            "stdout: Found index.ts and ui.ts",
+            "output: Found index.ts and ui.ts",
           ],
           traceAvailable: true,
         },

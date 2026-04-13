@@ -45,10 +45,10 @@ Good fits:
 ### I am resuming or recovering work
 
 Start with:
-- `/pantheon` → recommended actions
-- `/pantheon-overview` → workflow + background state together
+- `/pantheon` → the default launcher for start/resume/tasks/troubleshooting
 - `/pantheon-task-actions <taskId>` → one menu for watch/result/log/retry/attach/cancel
 - `/pantheon-resume` → persisted todos + recent background context
+- `/pantheon-overview` → workflow + background state together when you need the fuller expert view
 
 ---
 
@@ -90,7 +90,7 @@ This is the best place to inspect:
 
 Use:
 - `/pantheon-task-actions <taskId>` — best first stop; one menu for retry/cancel/log/result/watch/attach
-- `/pantheon-backgrounds` — overview of recent work
+- `/pantheon-backgrounds` — overview of recent work when you need the broader expert view
 - `/pantheon-watch <taskId>` — live state, heartbeat, and recent log tail
 - `/pantheon-result <taskId>` — final summary plus next recovery actions
 - `/pantheon-log <taskId>` — raw recent log output
@@ -98,10 +98,10 @@ Use:
 - `/pantheon-retry <taskId>` — rerun terminal or stale tasks
 
 Mental model:
+- **task-actions** = the default task hub
 - **watch** = what is happening right now
 - **result** = what happened and what to do next
 - **log** = raw output when you need detail
-- **task-actions** = interactive recovery/inspection shortcut
 
 ### Code review helper
 

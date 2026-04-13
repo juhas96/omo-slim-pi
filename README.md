@@ -71,7 +71,7 @@ Use Pantheon from the outside in:
    ```text
    /pantheon
    ```
-   The command center is organized around **Start work**, **Inspect**, **Recover**, and **Setup** flows.
+   The default launcher now stays focused on a small set of jobs: **start work**, **review**, **resume**, **tasks**, and **troubleshooting**. Lower-frequency setup and diagnostics live behind an **Advanced** path.
 
 2. **Try one bounded task**
    - choose **Start work · Delegate to specialist**
@@ -84,7 +84,8 @@ Use Pantheon from the outside in:
 
 4. **Try one background workflow**
    - start detached work with `pantheon_background`
-   - use `/pantheon-watch`, `/pantheon-result`, or `/pantheon-task-actions` to inspect and recover it
+   - use `/pantheon-task-actions` as the primary task inspector/recovery menu
+   - drop into advanced task commands only when you specifically need `/pantheon-watch`, `/pantheon-result`, or tmux attach behavior
 
 ### 👀 What you'll see in the TUI
 
@@ -99,11 +100,11 @@ Pantheon uses a few consistent surfaces:
 ### Helpful first actions
 
 ```text
-/pantheon                 # intent-driven command center
-/pantheon-hooks           # orchestration hook trace and runtime activity
-/pantheon-config          # merged config plus warnings
-/pantheon-overview        # workflow + background overview
+/pantheon                 # simplified command center
+/pantheon-council         # high-confidence multi-model decision
+/review                   # structured review helper
 /pantheon-task-actions    # inspect/retry/cancel/attach from one task menu
+/pantheon-doctor          # setup/runtime health checks
 ```
 
 ### Detailed guides

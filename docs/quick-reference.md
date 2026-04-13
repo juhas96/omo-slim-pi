@@ -37,27 +37,31 @@
 
 ## Command quick reference
 
-### Daily commands
+### Core commands
 
-- `/pantheon` — open the Pantheon command center
-- `/pantheon-config` — inspect merged config and diagnostics
-- `/pantheon-hooks` — inspect hook ordering and runtime activity
-- `/pantheon-overview` — combined workflow + background status
-- `/pantheon-task-actions <taskId>` — one menu for recovery/inspection actions
+These are the commands most users should start with:
+
+- `/pantheon` — open the simplified command center for start/resume/tasks/troubleshooting flows
+- `/pantheon-council` — ask for a high-confidence multi-model decision
+- `/review` — launch the structured code-review helper
+- `/pantheon-task-actions <taskId>` — one menu for task inspection, retry, cancel, attach, and logs
+- `/pantheon-resume` — rebuild context from persisted todos and recent background tasks
 - `/pantheon-spec-studio` — create a structured spec template in the editor
+- `/pantheon-doctor` — run setup and runtime health checks when something feels off
+
+### Advanced / expert commands
+
+Keep these for lower-frequency setup, inspection, and maintainer workflows:
+
+- `/pantheon-config` — inspect merged config and diagnostics
+- `/pantheon-overview` — combined workflow + background status
 - `/pantheon-as <agent>` — route the next task directly to a specialist
-
-### Debug / maintenance commands
-
 - `/pantheon-hooks` — inspect hook ordering and restored runtime middleware state
-- `/pantheon-debug-dir` — show the foreground debug trace directory
-- `/pantheon-debugs` — list recent debug traces
 - `/pantheon-debug [traceId]` — inspect a full debug trace
 - `/pantheon-subagents` — inspect live/recent subagent activity and jump to trace details
-- `/pantheon-auto-continue [on|off]` — toggle auto-continue behavior for unchecked todos
-- `/pantheon-todos` — inspect persisted workflow todos
-- `/pantheon-clear-todos` — clear persisted workflow todos/state
-- `/pantheon-cleanup` — remove terminal background-task artifacts according to retention rules
+- `/pantheon-adapters` — inspect the current adapter policy report
+- `/pantheon-adapter-health` — inspect adapter auth/readiness
+- `/pantheon-bootstrap` — scaffold project-local Pantheon files
 
 ## Suggested reading order
 

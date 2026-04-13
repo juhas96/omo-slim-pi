@@ -264,7 +264,29 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
     const debugDir = path.join(projectDir, ".oh-my-opencode-pi-debug");
     const stdoutPath = findFirstFile(debugDir, "stdout.ndjson");
     assert.ok(stdoutPath);
-    fs.writeFileSync(stdoutPath!, `header\n${"chunk-".repeat(12_000)}`, "utf8");
+    const streamedOutput = [
+      ...Array.from({ length: 2500 }, (_, index) => JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: `chunk-${index} ` },
+      })),
+      JSON.stringify({
+        type: "tool_result_end",
+        message: {
+          role: "tool",
+          content: [{ type: "text", text: "tool-progress: checked key files" }],
+        },
+      }),
+      JSON.stringify({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "final subagent answer" }],
+          model: "fake/model",
+          stopReason: "end_turn",
+        },
+      }),
+    ].join("\n");
+    fs.writeFileSync(stdoutPath!, streamedOutput, "utf8");
 
     await pantheonSubagents.handler("", {
       cwd: projectDir,
@@ -282,9 +304,29 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
       },
     });
     assert.match(editorWrites[0] ?? "", /Subagent: explorer/);
-    assert.match(editorWrites[0] ?? "", /Stdout:/);
+    assert.match(editorWrites[0] ?? "", /Output:/);
     assert.match(editorWrites[0] ?? "", /truncated: showing last/i);
+    assert.doesNotMatch(editorWrites[0] ?? "", /"type":"content_block_delta"/);
     assert.ok((editorWrites[0] ?? "").length < 80_000);
+
+    await pantheonSubagents.handler("", {
+      cwd: projectDir,
+      hasUI: true,
+      ui: {
+        theme: fakeTheme(),
+        custom: async () => ({ action: "stdout", index: 0 }),
+        setWidget() {},
+        setEditorText(text: string) {
+          editorWrites.push(text);
+        },
+        notify() {},
+        setStatus() {},
+        input: async () => "",
+      },
+    });
+    assert.match(editorWrites[1] ?? "", /Artifact: Output/);
+    assert.match(editorWrites[1] ?? "", /tool-progress: checked key files/);
+    assert.doesNotMatch(editorWrites[1] ?? "", /"message_end"/);
 
     await pantheonSubagents.handler("", {
       cwd: projectDir,
@@ -301,8 +343,8 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
         input: async () => "",
       },
     });
-    assert.match(editorWrites[1] ?? "", /Debug dir:/);
-    assert.match(editorWrites[1] ?? "", /Stdout:/);
+    assert.match(editorWrites[2] ?? "", /Debug dir:/);
+    assert.match(editorWrites[2] ?? "", /Stdout:/);
 
     await pantheonSubagents.handler("", {
       cwd: projectDir,
@@ -319,8 +361,8 @@ test("pantheon-subagents opens per-agent details and can jump to the full trace"
         input: async () => "",
       },
     });
-    assert.match(editorWrites[2] ?? "", /Command: \/pantheon-debug/);
-    assert.match(editorWrites[2] ?? "", /Trace:/);
+    assert.match(editorWrites[3] ?? "", /Command: \/pantheon-debug/);
+    assert.match(editorWrites[3] ?? "", /Trace:/);
     assert.equal(commandMessages.length, 0);
   } finally {
     process.argv[1] = originalArgv1;

@@ -122,7 +122,7 @@ test("review command rejects unsupported review modes", async () => {
   assert.match(notifications[0]?.message ?? "", /Usage: \/review/);
 });
 
-test("pantheon command center executes local UI actions without injecting slash commands into chat", async () => {
+test("pantheon command center routes advanced actions through a secondary menu without injecting slash commands into chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-center-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -134,11 +134,12 @@ test("pantheon command center executes local UI actions without injecting slash 
   const pantheonCommand = commands.get("pantheon");
   assert.ok(pantheonCommand?.handler);
 
+  let customCalls = 0;
   await pantheonCommand.handler("", {
     cwd: projectDir,
     hasUI: true,
     ui: {
-      custom: async () => "adapter-health",
+      custom: async () => (++customCalls === 1 ? "advanced" : "adapter-health"),
       notify(message: string, level?: string) {
         notifications.push({ message, level });
       },
@@ -150,6 +151,7 @@ test("pantheon command center executes local UI actions without injecting slash 
   });
 
   assert.equal(sentMessages.length, 0);
+  assert.equal(customCalls, 2);
   assert.equal(notifications.length, 1);
   assert.match(notifications[0]?.message ?? "", /docs-context7 \[ok\] auth=not-required/);
 });

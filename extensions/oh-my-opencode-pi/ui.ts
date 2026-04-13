@@ -411,7 +411,7 @@ export function buildPantheonSubagentInspectorLines(
   snapshot: PantheonSubagentInspectorSnapshot,
   expandedEntries: Iterable<number>,
   selectedIndex: number,
-  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l stdout • e stderr • p paths • t trace • Esc close",
+  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l output • e stderr • p paths • t trace • Esc close",
   maxBodyLines = 18,
 ): string[] {
   const expandedSet = new Set(expandedEntries);
@@ -467,7 +467,7 @@ export function buildPantheonSubagentInspectorLines(
 export async function showPantheonSubagentInspector(
   ctx: ExtensionContext,
   getSnapshot: () => PantheonSubagentInspectorSnapshot | undefined,
-  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l stdout • e stderr • p paths • t trace • Esc close",
+  hint = "↑↓ / Home End move • Enter or Space expand/collapse • o details • s summary • l output • e stderr • p paths • t trace • Esc close",
 ): Promise<PantheonSubagentInspectorAction | null> {
   if (!ctx.hasUI) return null;
   return ctx.ui.custom<PantheonSubagentInspectorAction | null>((tui, theme, _kb, done) => {
