@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+  cleanupBackgroundArtifacts,
   enqueueBackgroundSpec,
   getBackgroundSessionKey,
   isTaskStale,
@@ -224,6 +225,81 @@ test("background runner avoids CLI --tools when the agent depends on extension t
     if (previous === undefined) delete process.env[AGENT_DIR_ENV];
     else process.env[AGENT_DIR_ENV] = previous;
   }
+});
+
+test("cleanup can keep the newest terminal task without counting active jobs", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-cleanup-keep-"));
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  const writeTask = (id: string, status: "queued" | "running" | "completed" | "failed" | "cancelled", createdAt: number) => {
+    const resultPath = path.join(taskDir, `${id}.result.json`);
+    const logPath = path.join(taskDir, `${id}.log`);
+    const specPath = path.join(taskDir, `${id}.spec.json`);
+    fs.writeFileSync(logPath, `${id} log\n`);
+    fs.writeFileSync(specPath, JSON.stringify({ id }, null, 2));
+    fs.writeFileSync(resultPath, JSON.stringify({
+      id,
+      agent: "explorer",
+      task: `Task ${id}`,
+      status,
+      createdAt,
+      heartbeatAt: createdAt,
+      logPath,
+      resultPath,
+      specPath,
+    }, null, 2));
+    return { resultPath, logPath, specPath };
+  };
+
+  const running = writeTask("running", "running", 4_000);
+  const failed = writeTask("failed", "failed", 3_000);
+  const completed = writeTask("completed", "completed", 2_000);
+
+  const result = cleanupBackgroundArtifacts(taskDir, { keepCount: 1 });
+  assert.equal(result.removed, 1);
+  assert.equal(result.kept, 2);
+  assert.deepEqual(listBackgroundTasks(taskDir).map((task) => task.id), ["running", "failed"]);
+  assert.equal(fs.existsSync(running.resultPath), true);
+  assert.equal(fs.existsSync(failed.resultPath), true);
+  assert.equal(fs.existsSync(completed.resultPath), false);
+  assert.equal(fs.existsSync(completed.logPath), false);
+  assert.equal(fs.existsSync(completed.specPath), false);
+});
+
+test("cleanup removes all terminal background artifacts when keepCount is zero", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-cleanup-all-"));
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  const writeTask = (id: string, status: "queued" | "running" | "completed" | "failed" | "cancelled", createdAt: number) => {
+    const resultPath = path.join(taskDir, `${id}.result.json`);
+    const logPath = path.join(taskDir, `${id}.log`);
+    const specPath = path.join(taskDir, `${id}.spec.json`);
+    fs.writeFileSync(logPath, `${id} log\n`);
+    fs.writeFileSync(specPath, JSON.stringify({ id }, null, 2));
+    fs.writeFileSync(resultPath, JSON.stringify({
+      id,
+      agent: "fixer",
+      task: `Task ${id}`,
+      status,
+      createdAt,
+      heartbeatAt: createdAt,
+      logPath,
+      resultPath,
+      specPath,
+    }, null, 2));
+  };
+
+  writeTask("running", "running", 4_000);
+  writeTask("failed", "failed", 3_000);
+  writeTask("completed", "completed", 2_000);
+  writeTask("cancelled", "cancelled", 1_000);
+
+  const result = cleanupBackgroundArtifacts(taskDir, { keepCount: 0 });
+  assert.equal(result.removed, 3);
+  assert.equal(result.kept, 1);
+  assert.deepEqual(listBackgroundTasks(taskDir).map((task) => task.id), ["running"]);
 });
 
 test("background reconciliation marks stale jobs and watch views include heartbeat metadata", () => {

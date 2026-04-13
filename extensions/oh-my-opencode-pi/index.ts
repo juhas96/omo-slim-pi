@@ -3947,14 +3947,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("pantheon-cleanup", {
-    description: "Remove old completed background task artifacts",
+    description: "Remove terminal background task artifacts",
     handler: async (_args, ctx) => {
       const config = loadPantheonConfig(ctx.cwd).config;
       const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
       reconcileBackgroundTasks(taskDir, config.multiplexer);
-      const result = cleanupBackgroundArtifacts(taskDir);
+      const result = cleanupBackgroundArtifacts(taskDir, { keepCount: 0 });
       updatePantheonDashboard(ctx, config);
-      ctx.ui.notify(`Removed ${result.removed} old task artifacts. Kept ${result.kept}.`, "info");
+      ctx.ui.notify(`Removed ${result.removed} terminal task artifacts. Kept ${result.kept}.`, "info");
     },
   });
 

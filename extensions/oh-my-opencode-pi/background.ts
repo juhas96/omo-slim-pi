@@ -673,12 +673,23 @@ export function tailLog(logPath: string, maxLines = 80): string {
   return lines.slice(-maxLines).join("\n").trim() || "(log empty)";
 }
 
-export function cleanupBackgroundArtifacts(taskDir: string, keepCount = 50): { removed: number; kept: number } {
+export function cleanupBackgroundArtifacts(
+  taskDir: string,
+  options?: number | {
+    keepCount?: number;
+    statuses?: Array<BackgroundTaskRecord["status"]>;
+  },
+): { removed: number; kept: number } {
   const tasks = listBackgroundTasks(taskDir);
-  const removable = tasks.slice(keepCount).filter((task) => task.status === "completed" || task.status === "failed" || task.status === "cancelled");
+  const keepCount = typeof options === "number" ? options : options?.keepCount ?? 50;
+  const statuses = new Set((typeof options === "number" ? undefined : options?.statuses) ?? ["completed", "failed", "cancelled"]);
+  const removable = tasks
+    .filter((task) => statuses.has(task.status))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(Math.max(0, keepCount));
   let removed = 0;
   for (const task of removable) {
-    for (const filePath of [task.resultPath, task.logPath, task.resultPath.replace(/\.result\.json$/, ".spec.json")]) {
+    for (const filePath of [task.resultPath, task.logPath, task.specPath ?? task.resultPath.replace(/\.result\.json$/, ".spec.json")]) {
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch {
