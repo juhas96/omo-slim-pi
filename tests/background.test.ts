@@ -169,6 +169,80 @@ test("background runner completes soon after a final assistant message even if t
   }
 });
 
+test("background runner re-arms the timeout while the child keeps emitting progress", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-progress-timeout-"));
+  const agentDir = path.join(tempRoot, "agent");
+  const projectDir = path.join(tempRoot, "project");
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.json"), JSON.stringify({
+    background: { enabled: true, logDir: taskDir, maxConcurrent: 1, reuseSessions: false, heartbeatIntervalMs: 250, staleAfterMs: 5000 },
+    fallback: { timeoutMs: 250 },
+    workflow: { persistTodos: false },
+  }, null, 2));
+
+  const progressPi = path.join(tempRoot, "progress-pi.mjs");
+  fs.writeFileSync(progressPi, `
+    const task = process.argv[process.argv.length - 1] || "";
+    let step = 0;
+    const timer = setInterval(() => {
+      step += 1;
+      console.log(JSON.stringify({
+        type: "tool_result_end",
+        message: {
+          role: "tool",
+          content: [{ type: "text", text: "progress:" + step }]
+        }
+      }));
+      if (step >= 4) {
+        clearInterval(timer);
+        console.log(JSON.stringify({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "background ok:" + task.slice(0, 30) }],
+            model: "fake/model",
+            stopReason: "end_turn"
+          }
+        }));
+        process.exit(0);
+      }
+    }, 100);
+  `);
+
+  const previous = process.env[AGENT_DIR_ENV];
+  process.env[AGENT_DIR_ENV] = agentDir;
+  try {
+    const startedAt = Date.now();
+    const task = enqueueBackgroundSpec(projectDir, {
+      agent: "fixer",
+      task: "Run progress background task",
+      cwd: projectDir,
+      piCommand: process.execPath,
+      piBaseArgs: [progressPi],
+      retryOnEmpty: false,
+      timeoutMs: 250,
+    }, {
+      taskDir,
+      randomId: () => "bg_progress",
+      maxConcurrent: 1,
+    });
+
+    await waitFor(() => listBackgroundTasks(taskDir).some((entry) => entry.id === task.id && entry.status === "completed"), 4000);
+    const completed = listBackgroundTasks(taskDir).find((entry) => entry.id === task.id);
+    const durationMs = Date.now() - startedAt;
+    assert.equal(completed?.status, "completed");
+    assert.match(completed?.summary ?? "", /background ok:/i);
+    assert.ok(durationMs >= 350, `Expected run to outlast the base timeout because progress kept arriving, got ${durationMs}ms`);
+  } finally {
+    if (previous === undefined) delete process.env[AGENT_DIR_ENV];
+    else process.env[AGENT_DIR_ENV] = previous;
+  }
+});
+
 test("background runner avoids CLI --tools when the agent depends on extension tools", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-tools-"));
   const agentDir = path.join(tempRoot, "agent");

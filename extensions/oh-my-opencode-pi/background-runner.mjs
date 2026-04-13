@@ -115,21 +115,35 @@ async function runAttempt(spec, model) {
     });
     const timeoutMs = Number.isFinite(spec.timeoutMs) ? Math.max(0, Math.floor(spec.timeoutMs)) : 0;
     let timedOut = false;
-    const timer = timeoutMs > 0
-      ? setTimeout(() => {
-          timedOut = true;
-          result.abortReason = "timeout";
-          result.stopReason = "aborted";
-          result.errorMessage = "Subagent aborted (timeout)";
-          proc.kill("SIGTERM");
-          setTimeout(() => {
-            if (!proc.killed) proc.kill("SIGKILL");
-          }, 5000);
-        }, timeoutMs)
-      : undefined;
+    let timer;
+    const forceKill = () => {
+      setTimeout(() => {
+        if (proc.exitCode === null && !proc.killed) proc.kill("SIGKILL");
+      }, 5000);
+    };
+    const triggerTimeout = () => {
+      if (timedOut || proc.exitCode !== null) return;
+      timedOut = true;
+      result.abortReason = "timeout";
+      result.stopReason = "aborted";
+      result.errorMessage = "Subagent aborted (timeout)";
+      proc.kill("SIGTERM");
+      forceKill();
+    };
     const cleanupTimer = () => {
       if (timer) clearTimeout(timer);
+      timer = undefined;
     };
+    const armTimeout = () => {
+      if (timeoutMs <= 0 || timedOut) return;
+      cleanupTimer();
+      timer = setTimeout(triggerTimeout, timeoutMs);
+    };
+    const noteActivity = () => {
+      if (timeoutMs <= 0 || timedOut) return;
+      armTimeout();
+    };
+    armTimeout();
 
     const log = fs.createWriteStream(spec.logPath, { flags: "a" });
     let buffer = "";
@@ -168,12 +182,14 @@ async function runAttempt(spec, model) {
     };
 
     proc.stdout.on("data", (data) => {
+      noteActivity();
       buffer += data.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
       for (const line of lines) processLine(line);
     });
     proc.stderr.on("data", (data) => {
+      noteActivity();
       const text = data.toString();
       result.stderr += text;
       log.write(text);

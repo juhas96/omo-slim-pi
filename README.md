@@ -58,7 +58,7 @@ Open `pi` in the target project, then run:
 ```text
 /pantheon
 /pantheon-config
-/pantheon-runtime
+/pantheon-doctor
 ```
 
 If those commands resolve, the extension is loaded and the Pantheon surface is available.
@@ -100,7 +100,7 @@ Pantheon uses a few consistent surfaces:
 
 ```text
 /pantheon                 # intent-driven command center
-/pantheon-runtime         # runtime and parity status
+/pantheon-hooks           # orchestration hook trace and runtime activity
 /pantheon-config          # merged config plus warnings
 /pantheon-overview        # workflow + background overview
 /pantheon-task-actions    # inspect/retry/cancel/attach from one task menu
@@ -215,7 +215,7 @@ Bundled agents:
 | **Council** | [council.md](docs/council.md) | Multi-model consensus, presets, timeouts, and when to use `pantheon_council` |
 | **Multiplexer Integration** | [multiplexer-integration.md](docs/multiplexer-integration.md) | Tmux-backed background panes, layout, attach/reuse, troubleshooting |
 | **Cartography Skill** | [cartography.md](docs/cartography.md) | Hierarchical codemap generation and incremental repo mapping |
-| **Interview / Spec Workflow** | [interview.md](docs/interview.md) | Upstream parity note and the pi-native spec workflow replacement |
+| **Interview / Spec Workflow** | [interview.md](docs/interview.md) | Upstream interview difference and the pi-native spec workflow replacement |
 
 ### ⚙️ Config & reference
 
@@ -225,7 +225,6 @@ Bundled agents:
 | [Skills](docs/skills.md) | Bundled cartography skill, policy controls, setup hints |
 | [MCPs / Adapters](docs/mcps.md) | Pi-native adapter system that fills the role upstream MCP docs cover |
 | [Tools](docs/tools.md) | Background tasks, LSP, AST-grep, formatting, patch rescue, observability |
-| [Runtime Parity](docs/runtime-parity.md) | What maps cleanly from upstream and where pi still differs |
 | [Author-style Preset](docs/authors-preset.md) | A practical mixed-provider preset for day-to-day Pantheon usage |
 | [Repository Codemap](codemap.md) | Top-level architecture map for future contributors and agents |
 
@@ -278,19 +277,16 @@ To publish:
 npm publish
 ```
 
-## 🔎 Pi port / parity note
+## 🔎 Pi port notes
 
-This is not a byte-for-byte runtime clone of OpenCode.
+This package adapts Pantheon workflows to pi rather than cloning OpenCode behavior byte-for-byte.
 
 Some upstream behavior remains runtime-bound, especially:
 
 - OpenCode agent registry integration
 - exact OpenCode hook/interception semantics
 - exact `apply_patch` rescue semantics
-- full MCP runtime parity
 - exact detached-session lifecycle behavior
-
-For the detailed version, see [`docs/runtime-parity.md`](docs/runtime-parity.md).
 
 ## Overriding agents
 
@@ -352,7 +348,6 @@ For the full option map, presets, council config, adapter policy, and schema gui
 | `/pantheon-skills` | Show effective skill guidance |
 | `/pantheon-adapters` | List adapters and effective policy |
 | `/pantheon-backgrounds` | Inspect recent background tasks |
-| `/pantheon-runtime` | Inspect runtime/parity state |
 | `/pantheon-stats` | Inspect usage and reliability statistics |
 | `/pantheon-version` | Inspect installed package version and cached update state |
 | `/pantheon-update-check` | Force a fresh package update check |
@@ -416,7 +411,7 @@ See:
 - [`docs/cartography.md`](docs/cartography.md)
 - [`codemap.md`](codemap.md)
 
-### Adapters instead of MCP runtime parity
+### Adapters instead of MCP runtime semantics
 
 The pi port uses a policy-aware adapter system for docs, package, release, web, and code research.
 
@@ -430,7 +425,7 @@ Pantheon writes foreground debug traces and lightweight usage stats so failed de
 
 See:
 - [`docs/tools.md`](docs/tools.md)
-- [`docs/runtime-parity.md`](docs/runtime-parity.md)
+- [`docs/workflows.md`](docs/workflows.md)
 
 ## 📘 Where the detailed reference lives now
 
@@ -442,11 +437,11 @@ The README is intentionally the overview. Detailed reference moved to the docs s
 - council behavior → [`docs/council.md`](docs/council.md)
 - adapters / MCP-equivalent surface → [`docs/mcps.md`](docs/mcps.md)
 - tools / commands / background / LSP / patch behavior → [`docs/tools.md`](docs/tools.md)
-- runtime limits and parity gaps → [`docs/runtime-parity.md`](docs/runtime-parity.md)
+- runtime and workflow behavior → [`docs/workflows.md`](docs/workflows.md)
 
 ## Notes
 
 - Top-level sessions get the orchestrator prompt automatically.
 - Subagent sessions do **not** get it; they only receive their specialist prompt.
 - `pantheon_council` works without custom config, but config is how you get real model diversity.
-- This port aims for product-behavior parity where possible, not byte-for-byte OpenCode runtime parity.
+- This port adapts Pantheon workflows to pi rather than cloning OpenCode behavior exactly.

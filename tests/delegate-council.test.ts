@@ -138,6 +138,60 @@ test("pantheon_delegate resolves shortly after a final assistant message even if
   }
 });
 
+test("pantheon_delegate re-arms the timeout while the child keeps emitting progress", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-progress-timeout-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
+  fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.json"), JSON.stringify({
+    fallback: { delegateTimeoutMs: 250, retryOnEmpty: false },
+    workflow: { persistTodos: false },
+  }, null, 2));
+
+  const progressPiScript = path.join(tempRoot, "progress-pi.mjs");
+  fs.writeFileSync(progressPiScript, `
+    const task = process.argv[process.argv.length - 1] || "";
+    let step = 0;
+    const timer = setInterval(() => {
+      step += 1;
+      console.log(JSON.stringify({
+        type: "tool_result_end",
+        message: {
+          role: "tool",
+          content: [{ type: "text", text: "progress:" + step }]
+        }
+      }));
+      if (step >= 4) {
+        clearInterval(timer);
+        console.log(JSON.stringify({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "ok:" + task.slice(0, 40) }],
+            model: "fake/model",
+            stopReason: "end_turn"
+          }
+        }));
+        process.exit(0);
+      }
+    }, 100);
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = progressPiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+    const startedAt = Date.now();
+    const result = await delegateTool.execute("call-progress-timeout", { agent: "fixer", task: "Stay alive while making progress" }, undefined, undefined, { cwd: projectDir });
+    const durationMs = Date.now() - startedAt;
+    assert.equal(result.isError, false);
+    assert.match(result.content[0]?.text ?? "", /ok:Task:/);
+    assert.ok(durationMs >= 350, `Expected run to outlast the base timeout because progress kept arriving, got ${durationMs}ms`);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
 test("pantheon_delegate reports failures from the subagent runner", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-fail-"));
   const projectDir = path.join(tempRoot, "project");

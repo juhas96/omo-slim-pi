@@ -46,7 +46,6 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(tools.includes("pantheon_ast_grep_search"));
   assert.ok(tools.includes("pantheon_repo_map"));
   assert.ok(tools.includes("pantheon_code_map"));
-  assert.ok(tools.includes("pantheon_runtime_info"));
   assert.ok(tools.includes("pantheon_hook_trace"));
   assert.ok(tools.includes("pantheon_multiplexer_status"));
   assert.ok(tools.includes("pantheon_stats"));
@@ -63,7 +62,6 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(commands.includes("pantheon-skills"));
   assert.ok(!commands.includes("pantheon-repo-map"));
   assert.ok(!commands.includes("pantheon-code-map"));
-  assert.ok(commands.includes("pantheon-runtime"));
   assert.ok(commands.includes("pantheon-hooks"));
   assert.ok(commands.includes("pantheon-doctor"));
   assert.ok(commands.includes("pantheon-subagents"));

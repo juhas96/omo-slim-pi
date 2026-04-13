@@ -44,6 +44,6 @@ Or via tool:
 }
 ```
 
-## Related runtime note
+## Related note
 
-Because this is a parity gap rather than a bug, see [runtime-parity.md](runtime-parity.md) for the broader porting constraints.
+This is an intentional pi-specific workflow choice rather than a browser-flow port.

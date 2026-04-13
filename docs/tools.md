@@ -72,7 +72,7 @@ Supported surfaces currently include:
 - Go
 - Rust
 
-Support depth varies by language; see [runtime-parity.md](runtime-parity.md) for broader compatibility context.
+Support depth varies by language and available editor/runtime integrations.
 
 ## Patch and edit rescue
 
@@ -119,7 +119,6 @@ Structured adapter tools:
 For practical command selection and recovery sequences, see [workflows.md](workflows.md).
 
 - `pantheon_stats`
-- `pantheon_runtime_info`
 - `pantheon_hook_trace`
 - `pantheon_multiplexer_status`
 
@@ -140,7 +139,7 @@ Useful version/update commands:
 - `/pantheon-version`
 - `/pantheon-update-check`
 
-These help debug orchestration behavior, runtime parity limitations, and active background-task state.
+These help debug orchestration behavior, runtime limitations, and active background-task state.
 
 Long-running Pantheon commands such as delegate/council also stream partial UI updates before the final report lands, so foreground work no longer appears fully opaque while specialists are still running.
 
@@ -150,4 +149,3 @@ See also:
 
 - [mcps.md](mcps.md)
 - [multiplexer-integration.md](multiplexer-integration.md)
-- [runtime-parity.md](runtime-parity.md)

@@ -13,7 +13,7 @@ This package does **not** depend on OpenCode MCP runtime semantics. Instead it p
 - generic web search/fetch
 - repository-local markdown/docs search
 
-If you need exact parity details, see [runtime-parity.md](runtime-parity.md).
+This package documents pi-specific research behavior directly rather than maintaining a separate upstream-comparison page.
 
 ---
 
@@ -128,4 +128,3 @@ See also:
 
 - [tools.md](tools.md)
 - [configuration.md](configuration.md)
-- [runtime-parity.md](runtime-parity.md)

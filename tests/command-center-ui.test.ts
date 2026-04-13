@@ -276,20 +276,20 @@ test("pantheon-as executes delegate natively without posting the result into cha
   }
 });
 
-test("pantheon-runtime keeps labeled command output out of chat", async () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-runtime-"));
+test("pantheon-hooks keeps labeled command output out of chat", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-hooks-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
 
   const sentMessages: string[] = [];
   const commandMessages: Array<{ content?: string; details?: any }> = [];
   const commands = registerCommands(sentMessages, commandMessages);
-  const pantheonRuntime = commands.get("pantheon-runtime");
-  assert.ok(pantheonRuntime?.handler);
+  const pantheonHooks = commands.get("pantheon-hooks");
+  assert.ok(pantheonHooks?.handler);
 
   const editorWrites: string[] = [];
   const widgetWrites: string[][] = [];
-  await pantheonRuntime.handler("", {
+  await pantheonHooks.handler("", {
     cwd: projectDir,
     hasUI: true,
     ui: {
@@ -308,10 +308,10 @@ test("pantheon-runtime keeps labeled command output out of chat", async () => {
 
   assert.equal(sentMessages.length, 0);
   assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-runtime/);
+  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-hooks/);
   assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
-  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-runtime/);
+  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-hooks/);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /✓ ready/);
 });
 

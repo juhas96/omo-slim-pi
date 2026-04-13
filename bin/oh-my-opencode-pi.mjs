@@ -63,7 +63,7 @@ function install(flags) {
   for (const filePath of created) console.log(`- ${filePath}`);
   console.log('\nNext steps:');
   console.log('- Review the generated config and provider choices');
-  console.log('- Runtime verification happens inside pi: run /pantheon, /pantheon-config, and /pantheon-runtime');
+  console.log('- Runtime verification happens inside pi: run /pantheon, /pantheon-config, and /pantheon-doctor');
   console.log('- If you enabled tmux integration, verify you are inside a tmux session before expecting background panes');
   console.log('- Try /pantheon-bootstrap or /pantheon-spec-studio if you want guided setup/spec flows');
 }
@@ -81,7 +81,7 @@ function verify(flags) {
   console.log('Pantheon scaffold verified');
   for (const filePath of required) console.log(`- ok ${filePath}`);
   console.log('\nNote: this verifies generated scaffold files only.');
-  console.log('For runtime readiness, open pi in the target project and run /pantheon, /pantheon-config, and /pantheon-runtime.');
+  console.log('For runtime readiness, open pi in the target project and run /pantheon, /pantheon-config, and /pantheon-doctor.');
 }
 
 const flags = parseArgs(process.argv.slice(2));

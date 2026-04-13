@@ -744,7 +744,7 @@ function getDefaultConfig(): PantheonConfig {
       councillorsTimeoutMs: 180000,
     },
     fallback: {
-      timeoutMs: 15000,
+      timeoutMs: 60000,
       delegateTimeoutMs: 0,
       retryDelayMs: 500,
       retryOnEmpty: true,

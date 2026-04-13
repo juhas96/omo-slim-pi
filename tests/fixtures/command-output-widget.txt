@@ -1,2 +1,2 @@
-/pantheon-runtime ✓ ready
+/pantheon-hooks ✓ ready
 All systems nominal.

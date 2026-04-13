@@ -26,9 +26,9 @@ test("Pantheon UI renderers match approval fixtures", () => {
   Date.now = () => 1_700_000_000_000;
   try {
     const ctx = fakeCtx();
-    const commandOutput = buildPantheonCommandOutputLines(ctx, "/pantheon-runtime", "Pantheon runtime report\nAll systems nominal.", {
+    const commandOutput = buildPantheonCommandOutputLines(ctx, "/pantheon-hooks", "Pantheon hook trace report\nAll systems nominal.", {
       status: "success",
-      summary: "Runtime report",
+      summary: "Hook trace report",
     }).join("\n");
     assert.equal(commandOutput, fixture("command-output-widget.txt"));
 

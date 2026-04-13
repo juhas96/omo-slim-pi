@@ -139,7 +139,7 @@ See [council.md](council.md) for usage guidance.
     "defaultPreset": "review-board"
   },
   "fallback": {
-    "timeoutMs": 15000,
+    "timeoutMs": 60000,
     "delegateTimeoutMs": 0,
     "retryDelayMs": 500,
     "retryOnEmpty": true,
@@ -232,6 +232,8 @@ See [council.md](council.md) for usage guidance.
 - `fallback.agentTimeouts`
 - `fallback.agentChains`
 - `fallback.councilMaster`
+
+`fallback.timeoutMs` is activity-aware for subagent runs: Pantheon rearms the timeout whenever the child emits stdout/stderr, so active work is less likely to be aborted mid-run. Increase it when a provider or tool can stay silent for long stretches.
 
 `fallback.finalMessageGraceMs` controls how long Pantheon waits after a clear final assistant response before terminating a lingering child process. Increase it if a provider needs more teardown time; decrease it if foreground handoff still feels sluggish.
 
@@ -342,4 +344,3 @@ See also:
 - [mcps.md](mcps.md)
 - [skills.md](skills.md)
 - [workflows.md](workflows.md)
-- [runtime-parity.md](runtime-parity.md)

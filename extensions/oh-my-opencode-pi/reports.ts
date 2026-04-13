@@ -61,7 +61,7 @@ export function buildConfigReport(result: PantheonConfigLoadResult): string {
     "Suggested next steps:",
     "- Use /pantheon-adapters to inspect the effective adapter allowlist for the current session.",
     "- Use /pantheon-adapter-health before relying on external research sources.",
-    "- Use /pantheon-runtime or /pantheon-hooks when behavior does not match expectations.",
+    "- Use /pantheon-hooks or /pantheon-doctor when behavior does not match expectations.",
   ].filter((line): line is string => typeof line === "string").join("\n") + "\n";
 }
 

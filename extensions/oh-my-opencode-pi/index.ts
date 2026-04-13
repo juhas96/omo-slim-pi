@@ -415,49 +415,6 @@ function buildReviewCommandPrompt(request: ReviewCommandRequest, cwd: string): s
   return lines.join("\n");
 }
 
-function buildRuntimeParityReport(ctx: ExtensionContext, config: PantheonConfig): string {
-  const activeHooks = [
-    "session_start",
-    "session_shutdown",
-    "input",
-    "turn_start",
-    "before_agent_start",
-    "context",
-    "before_provider_request",
-    "tool_call",
-    "tool_result",
-    "agent_end",
-  ];
-  const supportedInterception = [
-    "Prompt injection via before_agent_start",
-    "Context shaping via context",
-    "Provider payload inspection via before_provider_request",
-    "Pre-tool mutation/blocking via tool_call",
-    "Post-tool mutation/guidance via tool_result",
-    "Session lifecycle state via session_start/session_shutdown",
-    "Turn-level guidance via turn_start",
-  ];
-  const runtimeGaps = [
-    "No OpenCode agent registry integration",
-    "No exact OpenCode apply_patch interception semantics",
-    "No full OpenCode provider/runtime parity",
-    "Some detached-session behaviors still require tmux/workflow approximations",
-  ];
-  return [
-    `Pantheon runtime report`,
-    `cwd: ${ctx.cwd}`,
-    `subagent: ${process.env[SUBAGENT_ENV] === "1" ? "yes" : "no"}`,
-    `delegation depth: ${process.env[DEPTH_ENV] ?? "0"}/${config.delegation?.maxDepth ?? 3}`,
-    `dashboard widget: ${config.ui?.dashboardWidget === false ? "disabled" : "enabled"}`,
-    `debug tracing: ${config.debug?.enabled === false ? "disabled" : "enabled"}`,
-    `workflow hints: ${config.workflow?.injectHints === false ? "disabled" : "enabled"}`,
-    `\nActive hooks:\n${activeHooks.map((hook) => `- ${hook}`).join("\n")}`,
-    `\nSupported interception points:\n${supportedInterception.map((item) => `- ${item}`).join("\n")}`,
-    `\nKnown runtime parity gaps:\n${runtimeGaps.map((item) => `- ${item}`).join("\n")}`,
-    `\nReference: docs/runtime-parity.md`,
-  ].join("\n");
-}
-
 function resolveBackgroundLogDir(cwd: string, config: PantheonConfig): string {
   const configured = config.background?.logDir?.trim() || path.join(getAgentDir(), ".oh-my-opencode-pi-tasks");
   return path.isAbsolute(configured) ? configured : path.join(cwd, configured);
@@ -954,6 +911,7 @@ async function runSingleAgent(
   signal: AbortSignal | undefined,
   onUpdate: OnUpdateCallback | undefined,
   finalMessageGraceMs: number,
+  onActivity?: () => void,
   debug?: SubagentDebugContext,
 ): Promise<SingleResult> {
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
@@ -1079,6 +1037,7 @@ async function runSingleAgent(
     };
 
     proc.stdout.on("data", (data) => {
+      onActivity?.();
       buffer += data.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -1086,6 +1045,7 @@ async function runSingleAgent(
     });
 
     proc.stderr.on("data", (data) => {
+      onActivity?.();
       const text = data.toString();
       currentResult.stderr += text;
       if (debug) writeDebugText(debug.stderrPath, text);
@@ -1182,7 +1142,13 @@ async function runSingleAgentWithFallback(
       if (signal.aborted) controller.abort(signal.reason ? `parent:${String(signal.reason)}` : "parent-signal");
       else signal.addEventListener("abort", relayAbort, { once: true });
     }
-    const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : undefined;
+    let timer: NodeJS.Timeout | undefined;
+    const resetAttemptTimeout = () => {
+      if (timeoutMs <= 0 || controller.signal.aborted) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+    };
+    resetAttemptTimeout();
 
     const debug = createSubagentDebugContext(
       debugTrace,
@@ -1192,7 +1158,7 @@ async function runSingleAgentWithFallback(
 
     try {
       appendDebugEvent(debugTrace, "attempt_start", { agentName, model, step, attempt: attemptIndex + 1, label: debug?.label, timeoutMs, finalMessageGraceMs });
-      const result = await runSingleAgent(ctxCwd, attemptAgent, task, cwd, step, controller.signal, onUpdate, finalMessageGraceMs, debug);
+      const result = await runSingleAgent(ctxCwd, attemptAgent, task, cwd, step, controller.signal, onUpdate, finalMessageGraceMs, resetAttemptTimeout, debug);
       lastResult = result;
       const emptyResponse = !hasMeaningfulResult(result);
       if (emptyResponse && retryOnEmpty && !result.errorMessage) {
@@ -1423,7 +1389,6 @@ const ResumeContextParams = Type.Object({
   includeFailedBackground: Type.Optional(Type.Boolean({ description: "Include failed/cancelled background tasks", default: true })),
 });
 
-const RuntimeInfoParams = Type.Object({});
 const StatsParams = Type.Object({});
 
 const BackgroundOverviewParams = Type.Object({
@@ -3755,18 +3720,6 @@ export default function (pi: ExtensionAPI) {
     handler: handlePantheonDoctorCommand,
   });
 
-  pi.registerCommand("pantheon-runtime", {
-    description: "Show current Pantheon runtime/hook parity information",
-    handler: async (_args, ctx) => {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const report = buildRuntimeParityReport(ctx, config);
-      presentPantheonCommandEditorOutput("/pantheon-runtime", report, ctx, {
-        summary: "Pantheon runtime parity report",
-        notifyMessage: "Loaded Pantheon runtime parity report into editor.",
-      });
-    },
-  });
-
   pi.registerCommand("pantheon-hooks", {
     description: "Show Pantheon orchestration hook ordering, tracing, and restored session middleware state",
     handler: handlePantheonHooksCommand,
@@ -4373,19 +4326,6 @@ export default function (pi: ExtensionAPI) {
       const stats = readPantheonStats(ctx.cwd, config);
       const evalReport = readPantheonEvaluationReport(ctx.cwd, config);
       return { content: [{ type: "text", text: renderPantheonStats(stats, evalReport) }], details: { stats, evalReport } };
-    },
-  });
-
-  pi.registerTool({
-    name: "pantheon_runtime_info",
-    label: "Pantheon Runtime Info",
-    description: "Report current Pantheon runtime hooks, active behaviors, and known parity limits inside pi.",
-    promptSnippet: "Inspect the current runtime/hook surface before assuming OpenCode-specific semantics are available.",
-    parameters: RuntimeInfoParams,
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const config = loadPantheonConfig(ctx.cwd).config;
-      const text = buildRuntimeParityReport(ctx, config);
-      return { content: [{ type: "text", text }], details: { hooks: ["session_start", "session_shutdown", "input", "turn_start", "before_agent_start", "context", "before_provider_request", "tool_call", "tool_result", "agent_end"] } };
     },
   });
 

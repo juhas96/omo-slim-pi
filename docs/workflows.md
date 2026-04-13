@@ -57,7 +57,7 @@ Start with:
 ### Foreground command results
 
 Non-interactive commands like:
-- `/pantheon-runtime`
+- `/pantheon-hooks`
 - `/pantheon-config`
 - `/pantheon-adapters`
 - `/pantheon-doctor`

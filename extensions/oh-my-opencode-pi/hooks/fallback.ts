@@ -24,7 +24,7 @@ export function resolveBackgroundAttemptTimeoutMs(config: PantheonConfig): numbe
   if (typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs >= 0) {
     return Math.floor(timeoutMs);
   }
-  return 15000;
+  return 60000;
 }
 
 export function resolveFinalMessageGraceMs(config: PantheonConfig): number {

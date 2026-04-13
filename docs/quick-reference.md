@@ -17,7 +17,7 @@
 | [Multiplexer Integration](multiplexer-integration.md) | Tmux-backed background panes, layouts, attach/reuse behavior |
 | [Cartography Skill](cartography.md) | Hierarchical codemap generation and incremental repo mapping |
 | [Pantheon Workflows](workflows.md) | Delegate vs council vs background, inspection paths, recovery workflows, and the `/review` helper |
-| [Interview / Spec Workflow](interview.md) | Upstream interview parity note and the pi-native spec workflow replacement |
+| [Interview / Spec Workflow](interview.md) | Upstream interview difference and the pi-native spec workflow replacement |
 
 ## ⚙️ Config & Reference
 
@@ -28,7 +28,6 @@
 | [Tools](tools.md) | Background tasks, doctor/health checks, LSP, AST-grep, formatting, patch rescue, observability |
 | [Configuration](configuration.md) | Config file locations, merge order, schema/diagnostics, presets, overrides, full option map |
 | [Orchestration Evals](evals.md) | Fast PR-safe suite, full release suite, deterministic scenarios, approval fixtures, benchmark harness, and eval reporting |
-| [Runtime Parity](runtime-parity.md) | What maps cleanly from upstream and where pi still differs |
 
 ## 💡 Presets
 
@@ -42,7 +41,7 @@
 
 - `/pantheon` — open the Pantheon command center
 - `/pantheon-config` — inspect merged config and diagnostics
-- `/pantheon-runtime` — inspect runtime/parity status
+- `/pantheon-hooks` — inspect hook ordering and runtime activity
 - `/pantheon-overview` — combined workflow + background status
 - `/pantheon-task-actions <taskId>` — one menu for recovery/inspection actions
 - `/pantheon-spec-studio` — create a structured spec template in the editor

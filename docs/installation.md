@@ -92,7 +92,7 @@ Useful checks:
 /pantheon
 /pantheon-config
 /pantheon-agents
-/pantheon-runtime
+/pantheon-doctor
 ```
 
 You can also verify installer output directly:
