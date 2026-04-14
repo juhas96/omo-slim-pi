@@ -38,7 +38,7 @@ The repository packages:
 
 ## Architecture notes
 
-- The extension is intentionally centralized in `extensions/oh-my-opencode-pi/index.ts`, with focused helper modules for config, background tasks, debug traces, workflow state, UI rendering, and code tools.
+- The extension is intentionally centralized in `extensions/oh-my-opencode-pi/index.ts`, with focused helper modules for config, specialist metadata/copy, background tasks, debug traces, workflow state, UI rendering, and code tools.
 - Config is deep-merged from global and project-local JSON/JSONC files, then sanitized into a typed runtime config.
 - Background work is persisted to task artifacts on disk and can optionally surface through tmux panes.
 - Research is adapter-based rather than OpenCode-MCP-based.

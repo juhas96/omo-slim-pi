@@ -41,7 +41,7 @@ export function registerPantheonNamedCommands(registerCommand: RegisterCommand, 
   });
 
   registerCommand("pantheon-agents", {
-    description: "List available Pantheon agents",
+    description: "Inspect Pantheon specialists and when to use them",
     handler: handlers.handlePantheonAgentsCommand,
   });
 

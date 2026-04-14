@@ -154,8 +154,8 @@ test("pantheon_delegate keeps live widget entries in running state until the pro
     const activityLines = widgetCalls
       .filter((call) => call.key === "oh-my-opencode-pi-subagent-activity" && Array.isArray(call.lines))
       .map((call) => call.lines?.join("\n") ?? "");
-    assert.ok(activityLines.some((text) => text.includes("… fixer — live:Task:")));
-    assert.ok(activityLines.some((text) => text.includes("✓ fixer — live:Task:")));
+    assert.ok(activityLines.some((text) => text.includes("… fixer — Implementation specialist · live:Task:")));
+    assert.ok(activityLines.some((text) => text.includes("✓ fixer — Implementation specialist · live:Task:")));
   } finally {
     process.argv[1] = originalArgv1;
   }

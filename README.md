@@ -187,6 +187,8 @@ Pantheon uses a few consistent surfaces:
 /pantheon-agents
 ```
 
+The command now acts as a lightweight specialist guide: it shows what each Pantheon specialist is best for, when not to use it, example task shapes, and the active source/model summary when available.
+
 Bundled agents:
 
 - `explorer`

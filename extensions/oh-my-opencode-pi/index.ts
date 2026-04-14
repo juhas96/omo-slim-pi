@@ -147,6 +147,13 @@ import { checkForPackageUpdates, renderPackageUpdateReport } from "./update-chec
 import { PANTHEON_USER_AGENT } from "./metadata.js";
 import { registerPantheonNamedCommands } from "./command-registry.js";
 import { registerPantheonCodeTools } from "./tool-registry.js";
+import {
+  buildPantheonActivityDescription,
+  buildPantheonAgentsReport,
+  buildPantheonDelegateRationale,
+  describePantheonSpecialist,
+  getPantheonSpecialistGuide,
+} from "./specialists.js";
 
 export { selectAdapterIds, summarizeAdapterSearchSections } from "./adapter-selection.js";
 
@@ -501,7 +508,8 @@ function buildSubagentActivityPreview(result: SingleResult): string {
   const summary = summarizeResult(result);
   const duration = formatElapsed(result.durationMs ?? (typeof result.startedAt === "number" && result.exitCode === -1 ? Date.now() - result.startedAt : undefined));
   const body = summary !== "(no output)" ? previewText(summary, 120) : result.exitCode === -1 ? "waiting for output…" : summary;
-  return duration ? `${body} (${duration})` : body;
+  const preview = duration ? `${body} (${duration})` : body;
+  return buildPantheonActivityDescription(result.agent, preview);
 }
 
 function getSubagentStatusLabel(result: SingleResult): string {
@@ -604,6 +612,7 @@ function readSubagentOutputPreview(
 
 function buildSubagentExpandedLines(entry: { label: string; result: SingleResult }, options?: { stdoutLines?: number; stderrLines?: number }): string[] {
   const result = entry.result;
+  const guide = getPantheonSpecialistGuide(result.agent);
   const statusParts = [getSubagentStatusLabel(result)];
   if (result.model) statusParts.push(`model ${previewText(result.model, 40)}`);
   const duration = formatElapsed(result.durationMs ?? (typeof result.startedAt === "number" && result.exitCode === -1 ? Date.now() - result.startedAt : undefined));
@@ -611,10 +620,12 @@ function buildSubagentExpandedLines(entry: { label: string; result: SingleResult
 
   const summary = summarizeResult(result);
   const lines = [
+    guide && !guide.internal ? `specialist: ${guide.roleSummary}` : undefined,
+    guide && !guide.internal ? `why: ${guide.rationale}` : undefined,
     `task: ${previewText(result.task, 140)}`,
     `status: ${statusParts.join(" • ")}`,
     `summary: ${previewText(summary, 180)}`,
-  ];
+  ].filter((line): line is string => Boolean(line));
 
   const outputPreview = readSubagentOutputPreview(
     result,
@@ -737,8 +748,12 @@ function buildSubagentArtifactText(
   fallback: string,
   options?: { maxBytes?: number; mode?: "head" | "tail" },
 ): string {
+  const guide = getPantheonSpecialistGuide(entry.result.agent);
   return [
     `Subagent: ${entry.label}`,
+    `Agent: ${entry.result.agent}`,
+    guide && !guide.internal ? `Specialist: ${guide.roleSummary}` : undefined,
+    guide && !guide.internal ? `Why selected: ${guide.rationale}` : undefined,
     `Artifact: ${artifactLabel}`,
     filePath ? `Path: ${filePath}` : undefined,
     `Preview: ${buildDebugArtifactDescription(filePath, options)}`,
@@ -752,8 +767,12 @@ function buildSubagentOutputText(
   options?: { maxBytes?: number; mode?: "head" | "tail" },
 ): string {
   const summary = summarizeResult(entry.result);
+  const guide = getPantheonSpecialistGuide(entry.result.agent);
   return [
     `Subagent: ${entry.label}`,
+    `Agent: ${entry.result.agent}`,
+    guide && !guide.internal ? `Specialist: ${guide.roleSummary}` : undefined,
+    guide && !guide.internal ? `Why selected: ${guide.rationale}` : undefined,
     "Artifact: Output",
     entry.result.debugStdoutPath ? `Path: ${entry.result.debugStdoutPath}` : undefined,
     `Preview: ${buildDebugArtifactDescription(entry.result.debugStdoutPath, options)}`,
@@ -768,9 +787,12 @@ function buildSubagentOutputText(
 
 function buildSubagentPathsText(entry: { label: string; result: SingleResult }): string {
   const result = entry.result;
+  const guide = getPantheonSpecialistGuide(result.agent);
   return [
     `Subagent: ${entry.label}`,
     `Agent: ${result.agent}`,
+    guide && !guide.internal ? `Specialist: ${guide.roleSummary}` : undefined,
+    guide && !guide.internal ? `Why selected: ${guide.rationale}` : undefined,
     result.debugTraceId ? `Trace: ${result.debugTraceId}` : undefined,
     result.debugDir ? `Debug dir: ${result.debugDir}` : undefined,
     result.debugSummaryPath ? `Summary JSON: ${result.debugSummaryPath}` : undefined,
@@ -781,10 +803,14 @@ function buildSubagentPathsText(entry: { label: string; result: SingleResult }):
 
 function buildSubagentDetailText(entry: { label: string; result: SingleResult }): string {
   const result = entry.result;
+  const guide = getPantheonSpecialistGuide(result.agent);
   const summary = summarizeResult(result);
   return [
     `Subagent: ${entry.label}`,
     `Agent: ${result.agent}`,
+    guide && !guide.internal ? `Specialist: ${guide.roleSummary}` : undefined,
+    guide && !guide.internal ? `Best for: ${guide.bestFor}` : undefined,
+    guide && !guide.internal ? `Why selected: ${guide.rationale}` : undefined,
     `Status: ${result.exitCode === -1 ? "running" : result.exitCode === 0 ? "completed" : "failed"}`,
     result.model ? `Model: ${result.model}` : undefined,
     result.startedAt ? `Started: ${new Date(result.startedAt).toISOString()}` : undefined,
@@ -853,11 +879,13 @@ function renderDelegateCall(args: {
     return new Text(lines.join("\n"), 0, 0);
   }
 
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", args.agent || "specialist")}\n  ${theme.fg("muted", previewText(args.task || "", 90))}`,
-    0,
-    0,
-  );
+  const rationale = buildPantheonDelegateRationale(args.agent);
+  const lines = [
+    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", args.agent || "specialist")}`,
+    `  ${theme.fg("muted", previewText(args.task || "", 90))}`,
+    ...(rationale ? [`  ${theme.fg("dim", "why:")} ${theme.fg("muted", rationale)}`] : []),
+  ];
+  return new Text(lines.join("\n"), 0, 0);
 }
 
 function renderDelegateResult(
@@ -879,6 +907,10 @@ function renderDelegateResult(
   const results = expanded ? details.results : details.results.slice(0, 6);
   for (const item of results) {
     lines.push(formatResultLine(item, theme, expanded ? 180 : 110));
+    const rationale = buildPantheonDelegateRationale(item.agent);
+    if (rationale && (expanded || details.mode === "single")) {
+      lines.push(`  ${theme.fg("dim", "why:")} ${theme.fg("muted", rationale)}`);
+    }
     if (expanded) {
       for (const detail of buildSubagentExpandedLines({ label: item.agent, result: item }, { stdoutLines: 3, stderrLines: 2 })) {
         lines.push(`  ${theme.fg("muted", detail)}`);
@@ -2989,9 +3021,13 @@ export default function (pi: ExtensionAPI) {
 
   async function handlePantheonAgentsCommand(_args: string, ctx: ExtensionContext) {
     const { agents, projectAgentsDir } = discoverPantheonAgents(ctx.cwd, true);
-    const lines = agents.map((agent) => `- ${agent.name} [${agent.source}] — ${agent.description}`);
-    if (projectAgentsDir) lines.push(`\nProject overrides: ${projectAgentsDir}`);
-    ctx.ui.notify(lines.join("\n"), "info");
+    const report = buildPantheonAgentsReport(agents, projectAgentsDir);
+    presentPantheonCommandEditorOutput("/pantheon-agents", report, ctx, {
+      summary: `Specialist guide for ${agents.filter((agent) => !["councillor", "council-master"].includes(agent.name)).length} public agent${agents.filter((agent) => !["councillor", "council-master"].includes(agent.name)).length === 1 ? "" : "s"}`,
+      notifyMessage: "Loaded Pantheon specialist guide into the editor.",
+      status: "success",
+      modes: ["widget-summary", "editor-report", "notify"],
+    });
   }
 
   async function handlePantheonSkillsCommand(_args: string, ctx: ExtensionContext) {
@@ -3491,7 +3527,11 @@ export default function (pi: ExtensionAPI) {
       "Choose specialist",
       discovery.agents
         .filter((agent) => !["councillor", "council-master"].includes(agent.name))
-        .map((agent) => ({ value: agent.name, label: agent.name, description: `${agent.description} [${agent.source}]` })),
+        .map((agent) => ({
+          value: agent.name,
+          label: agent.name,
+          description: `${describePantheonSpecialist(agent.name, agent.description)} [${agent.source}]`,
+        })),
     );
     if (!agentName) return;
     const task = await ctx.ui.input("Delegation task", `Task for ${agentName}`);
@@ -3641,7 +3681,7 @@ export default function (pi: ExtensionAPI) {
       const recommendedValues = new Set(recommendedItems.map((item) => item.value));
       let action = await showPantheonSelect(ctx, "Pantheon — choose next move", [
         ...recommendedItems,
-        { value: "delegate", label: "Start work · Delegate to specialist", description: "Route focused work to Explorer, Librarian, Oracle, Designer, or Fixer." },
+        { value: "delegate", label: "Start work · Delegate to specialist", description: "Choose Explorer, Librarian, Oracle, Designer, or Fixer with role guidance." },
         { value: "council", label: "Start work · Ask council", description: "Get multiple perspectives and a synthesized recommendation." },
         { value: "review", label: "Review · Review code changes", description: "Launch the structured diff review helper for local changes, commits, or pull requests." },
         { value: "spec-studio", label: "Plan · Open spec studio", description: "Create an editor-first brief for feature, refactor, investigation, or incident work." },
@@ -3656,7 +3696,7 @@ export default function (pi: ExtensionAPI) {
         action = await showPantheonSelect(ctx, "Pantheon — advanced commands", [
           { value: "config", label: "Config · Open config report", description: "Inspect merged config, validation warnings, and active presets." },
           { value: "bootstrap", label: "Setup · Bootstrap Pantheon", description: "Scaffold project-local Pantheon config, adapters, prompts, and agent directories." },
-          { value: "agents", label: "Setup · List agents", description: "Show bundled and override Pantheon specialists." },
+          { value: "agents", label: "Inspect · Specialist guide", description: "Review Pantheon specialist roles, best-fit tasks, and active overrides." },
           { value: "skills", label: "Setup · Skills guidance", description: "Show skill policy guidance and a starter config snippet." },
           { value: "adapter-health", label: "Setup · Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
           { value: "overview", label: "Inspect · Workflow overview", description: "See workflow state and background task activity together." },

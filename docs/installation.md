@@ -111,7 +111,7 @@ A good first-run flow is:
 
 1. run `/pantheon-config` to inspect active config sources and warnings
 2. run `/pantheon` to open the command center
-3. run `/pantheon-agents` to confirm bundled specialists are loaded
+3. run `/pantheon-agents` to confirm bundled specialists are loaded and inspect when to use each one
 4. run `/pantheon-skills` to inspect effective skill guidance
 5. if you want repository mapping, run `/skill:cartography`
 6. if you want project-local overrides, run `/pantheon-bootstrap`

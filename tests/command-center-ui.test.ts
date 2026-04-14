@@ -122,6 +122,50 @@ test("review command rejects unsupported review modes", async () => {
   assert.match(notifications[0]?.message ?? "", /Usage: \/review/);
 });
 
+test("pantheon-agents posts a specialist guide to the editor/widget surfaces", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-agents-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  const sentMessages: string[] = [];
+  const commandMessages: Array<{ content?: string; details?: any }> = [];
+  const notifications: Array<{ message: string; level?: string }> = [];
+  const commands = registerCommands(sentMessages, commandMessages);
+  const pantheonAgents = commands.get("pantheon-agents");
+  assert.ok(pantheonAgents?.handler);
+
+  const editorWrites: string[] = [];
+  const widgetWrites: string[][] = [];
+  await pantheonAgents.handler("", {
+    cwd: projectDir,
+    hasUI: true,
+    ui: {
+      notify(message: string, level?: string) {
+        notifications.push({ message, level });
+      },
+      setEditorText(text: string) {
+        editorWrites.push(text);
+      },
+      setStatus() {},
+      setWidget(_key: string, lines?: string[]) {
+        if (Array.isArray(lines)) widgetWrites.push(lines);
+      },
+      input: async () => "",
+      custom: async () => null,
+    },
+  });
+
+  assert.equal(sentMessages.length, 0);
+  assert.equal(editorWrites.length, 1);
+  assert.match(editorWrites[0] ?? "", /Pantheon specialist guide/);
+  assert.match(editorWrites[0] ?? "", /Fixer \[bundled\]/);
+  assert.match(editorWrites[0] ?? "", /Best for: Clear, implementation-heavy tasks/);
+  assert.equal(commandMessages.length, 0);
+  assert.ok(widgetWrites.length > 0);
+  assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-agents/);
+  assert.equal(notifications.at(-1)?.message, "Loaded Pantheon specialist guide into the editor.");
+});
+
 test("pantheon command center routes advanced actions through a secondary menu without injecting slash commands into chat", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-center-"));
   const projectDir = path.join(tempRoot, "project");

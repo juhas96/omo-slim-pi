@@ -13,6 +13,7 @@ This is where the package turns prompts and configuration into actual pi command
 | `index.ts` | Main extension entrypoint. Registers Pantheon tools and commands, attaches hook behavior, coordinates delegation/council/background flows, and renders runtime status. |
 | `config.ts` | Loads global and project config, resolves presets, validates option shapes, and computes agent skill/adapter policy. |
 | `agents.ts` | Discovers bundled, user, and project-local agents and applies prompt/model/tool overrides. |
+| `specialists.ts` | Pantheon specialist copy and metadata used for launcher descriptions, inspection reports, and specialist rationale surfaces. |
 | `background.ts` | Detached task lifecycle: queueing, task files, reconciliation, tmux pane attach/reuse, retry, cancellation, summaries. |
 | `background-runner.mjs` | Separate process entrypoint for executing background jobs. |
 | `orchestration.ts` | Internal orchestration runtime snapshot and summary helpers. |
