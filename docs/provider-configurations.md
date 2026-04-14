@@ -34,21 +34,21 @@ A straightforward starting point:
 {
   "extends": ["durable"],
   "agents": {
-    "oracle": { "model": "openai/gpt-4.1", "variant": "high" },
-    "explorer": { "model": "openai/gpt-4.1-mini", "variant": "low" },
-    "librarian": { "model": "openai/gpt-4.1-mini", "variant": "low" },
-    "designer": { "model": "openai/gpt-4.1-mini", "variant": "medium" },
-    "fixer": { "model": "openai/gpt-4.1-mini", "variant": "low" }
+    "oracle": { "model": "openai/gpt-5.4", "variant": "high" },
+    "explorer": { "model": "openai/gpt-5.4-mini", "variant": "low" },
+    "librarian": { "model": "openai/gpt-5.4-mini", "variant": "low" },
+    "designer": { "model": "openai/gpt-5.4-mini", "variant": "medium" },
+    "fixer": { "model": "openai/gpt-5.4-mini", "variant": "low" }
   },
   "council": {
     "defaultPreset": "review-board",
     "presets": {
       "review-board": {
-        "master": { "model": "openai/gpt-4.1", "variant": "high" },
+        "master": { "model": "openai/gpt-5.4", "variant": "high" },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
-          { "name": "architect", "model": "openai/gpt-4.1-mini", "variant": "medium" },
-          { "name": "skeptic", "model": "openai/gpt-4.1-mini", "variant": "medium" }
+          { "name": "reviewer", "model": "openai/gpt-5.4" },
+          { "name": "architect", "model": "openai/gpt-5.4-mini", "variant": "medium" },
+          { "name": "skeptic", "model": "openai/gpt-5.4-mini", "variant": "medium" }
         ]
       }
     }
@@ -71,18 +71,18 @@ The pi port works best when you give different specialists different strengths.
       "variant": "high"
     },
     "explorer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowedAdapters": ["local-docs", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowedAdapters": ["local-docs", "docs-context7", "npm-registry", "github-releases", "web-search"]
     },
     "designer": {
       "model": "google/gemini-2.5-pro"
     },
     "fixer": {
-      "model": "openai/gpt-4.1"
+      "model": "openai/gpt-5.4"
     }
   },
   "council": {
@@ -95,7 +95,7 @@ The pi port works best when you give different specialists different strengths.
           "prompt": "Prioritize correctness and simplicity."
         },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
+          { "name": "reviewer", "model": "openai/gpt-5.4" },
           { "name": "architect", "model": "anthropic/claude-sonnet-4-5" },
           { "name": "skeptic", "model": "google/gemini-2.5-pro" }
         ]
@@ -104,10 +104,10 @@ The pi port works best when you give different specialists different strengths.
   },
   "fallback": {
     "agentChains": {
-      "fixer": ["openai/gpt-4.1-mini"],
-      "librarian": ["openai/gpt-4.1-mini"]
+      "fixer": ["openai/gpt-5.4-mini"],
+      "librarian": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-4.1"]
+    "councilMaster": ["openai/gpt-5.4"]
   }
 }
 ```
@@ -160,10 +160,10 @@ Use fallback chains when one model is ideal but you want graceful degradation.
 {
   "fallback": {
     "agentChains": {
-      "explorer": ["openai/gpt-4.1-mini"],
-      "librarian": ["openai/gpt-4.1-mini"]
+      "explorer": ["openai/gpt-5.4-mini"],
+      "librarian": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-4.1"],
+    "councilMaster": ["openai/gpt-5.4"],
     "finalMessageGraceMs": 1500
   }
 }

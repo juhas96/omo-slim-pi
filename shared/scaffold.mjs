@@ -11,26 +11,26 @@ export function buildPantheonScaffoldConfig({ tmuxEnabled = false, skillsEnabled
   },
   "agents": {
     "oracle": {
-      "model": "openai/gpt-4.1",
+      "model": "openai/gpt-5.4",
       "variant": "high"
     },
     "explorer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "variant": "low",
       "allowSkills": ${skillsEnabled ? '["cartography"]' : '[]'},
       "allowedAdapters": ["local-docs", "docs-context7", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "variant": "low",
       "allowedAdapters": ["local-docs", "docs-context7", "github-releases", "github-code-search", "web-search", "npm-registry"]
     },
     "designer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "variant": "medium"
     },
     "fixer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "variant": "low"
     }
   },
@@ -39,14 +39,14 @@ export function buildPantheonScaffoldConfig({ tmuxEnabled = false, skillsEnabled
     "presets": {
       "review-board": {
         "master": {
-          "model": "openai/gpt-4.1",
+          "model": "openai/gpt-5.4",
           "variant": "high",
           "prompt": "Prioritize correctness, maintainability, and operational simplicity."
         },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
-          { "name": "architect", "model": "openai/gpt-4.1-mini", "variant": "medium" },
-          { "name": "skeptic", "model": "openai/gpt-4.1-mini", "variant": "medium" }
+          { "name": "reviewer", "model": "openai/gpt-5.4" },
+          { "name": "architect", "model": "openai/gpt-5.4-mini", "variant": "medium" },
+          { "name": "skeptic", "model": "openai/gpt-5.4-mini", "variant": "medium" }
         ]
       }
     }

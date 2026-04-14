@@ -18,10 +18,10 @@ test("installer CLI scaffolds project-local Pantheon files and verify passes", (
   const configText = fs.readFileSync(configPath, "utf8");
   assert.match(configText, /"tmux": true/);
   assert.match(configText, /"cartography"/);
-  assert.match(configText, /"oracle": \{[\s\S]*?"model": "openai\/gpt-4\.1"/);
+  assert.match(configText, /"oracle": \{[\s\S]*?"model": "openai\/gpt-5\.4"/);
   assert.match(configText, /"designer": \{[\s\S]*?"variant": "medium"/);
   assert.match(configText, /"defaultPreset": "review-board"/);
-  assert.match(configText, /"reviewer", "model": "openai\/gpt-4\.1"/);
+  assert.match(configText, /"reviewer", "model": "openai\/gpt-5\.4"/);
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "pantheon-adapters", "README.md")));
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "agents", "README.md")));
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "prompts", "README.md")));

@@ -22,19 +22,19 @@ It uses:
       "variant": "high"
     },
     "explorer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowSkills": ["cartography"],
       "allowedAdapters": ["local-docs", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowedAdapters": ["local-docs", "docs-context7", "npm-registry", "github-releases", "web-search"]
     },
     "designer": {
       "model": "google/gemini-2.5-pro"
     },
     "fixer": {
-      "model": "openai/gpt-4.1"
+      "model": "openai/gpt-5.4"
     }
   },
   "council": {
@@ -47,7 +47,7 @@ It uses:
           "prompt": "Prioritize correctness, maintainability, and operational simplicity."
         },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-4.1" },
+          { "name": "reviewer", "model": "openai/gpt-5.4" },
           { "name": "architect", "model": "anthropic/claude-sonnet-4-5" },
           { "name": "skeptic", "model": "google/gemini-2.5-pro" }
         ]
@@ -58,11 +58,11 @@ It uses:
     "retryOnEmpty": true,
     "retryDelayMs": 750,
     "agentChains": {
-      "explorer": ["openai/gpt-4.1-mini"],
-      "librarian": ["openai/gpt-4.1-mini"],
-      "fixer": ["openai/gpt-4.1-mini"]
+      "explorer": ["openai/gpt-5.4-mini"],
+      "librarian": ["openai/gpt-5.4-mini"],
+      "fixer": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-4.1"]
+    "councilMaster": ["openai/gpt-5.4"]
   },
   "skills": {
     "defaultAllow": ["cartography"],

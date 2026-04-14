@@ -114,7 +114,7 @@ See [council.md](council.md) for usage guidance.
       "allowedAdapters": ["docs-context7", "grep-app", "web-search"]
     },
     "fixer": {
-      "model": "openai/gpt-4.1",
+      "model": "openai/gpt-5.4",
       "promptOverrideFile": "./prompts/fixer-override.md",
       "deniedAdapters": ["grep-app"]
     }
@@ -149,10 +149,10 @@ See [council.md](council.md) for usage guidance.
       "librarian": 120000
     },
     "agentChains": {
-      "fixer": ["openai/gpt-4.1-mini"],
-      "librarian": ["openai/gpt-4.1-mini"]
+      "fixer": ["openai/gpt-5.4-mini"],
+      "librarian": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-4.1"]
+    "councilMaster": ["openai/gpt-5.4"]
   }
 }
 ```

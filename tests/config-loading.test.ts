@@ -38,9 +38,9 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     },
     "agents": {
       "fixer": {
-        "model": "openai/gpt-4.1",
+        "model": "openai/gpt-5.4",
         "variant": "high",
-        "options": ["--model", "openai/gpt-4.1"],
+        "options": ["--model", "openai/gpt-5.4"],
         "promptOverrideFile": "./fixer-global.md",
         "allowedAdapters": ["web-search"]
       }
@@ -77,7 +77,7 @@ test("loadPantheonConfig supports JSONC, presets, deep merge, and agent prompt f
     assert.equal(result.config.research?.maxResults, 9);
     assert.equal(result.config.updates?.notify, false);
     assert.equal(result.config.updates?.checkIntervalHours, 12);
-    assert.equal(result.config.agents?.fixer?.model, "openai/gpt-4.1");
+    assert.equal(result.config.agents?.fixer?.model, "openai/gpt-5.4");
     assert.equal(result.config.agents?.fixer?.variant, "high");
     assert.equal(result.config.agents?.fixer?.promptOverrideFile, globalPrompt);
     assert.deepEqual(result.config.agents?.fixer?.allowedAdapters, ["web-search"]);

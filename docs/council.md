@@ -95,7 +95,7 @@ You can override any preset in config.
         "councillors": [
           {
             "name": "reviewer",
-            "model": "openai/gpt-4.1",
+            "model": "openai/gpt-5.4",
             "prompt": "Review for bugs, correctness, and edge cases."
           },
           {

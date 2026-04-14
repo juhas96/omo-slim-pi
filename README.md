@@ -317,12 +317,12 @@ Minimal example:
   "agents": {
     "oracle": { "model": "anthropic/claude-sonnet-4-5", "variant": "high" },
     "explorer": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowSkills": ["cartography"],
       "allowedAdapters": ["local-docs", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-5.4-mini",
       "allowedAdapters": ["local-docs", "docs-context7", "npm-registry", "web-search"]
     }
   },
