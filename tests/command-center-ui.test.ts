@@ -136,6 +136,7 @@ test("pantheon-agents posts a specialist guide to the editor/widget surfaces", a
 
   const editorWrites: string[] = [];
   const widgetWrites: string[][] = [];
+  let customCalls = 0;
   await pantheonAgents.handler("", {
     cwd: projectDir,
     hasUI: true,
@@ -151,7 +152,10 @@ test("pantheon-agents posts a specialist guide to the editor/widget surfaces", a
         if (Array.isArray(lines)) widgetWrites.push(lines);
       },
       input: async () => "",
-      custom: async () => null,
+      custom: async () => {
+        customCalls += 1;
+        return null;
+      },
     },
   });
 
@@ -161,6 +165,7 @@ test("pantheon-agents posts a specialist guide to the editor/widget surfaces", a
   assert.match(editorWrites[0] ?? "", /Fixer \[bundled\]/);
   assert.match(editorWrites[0] ?? "", /Best for: Clear, implementation-heavy tasks/);
   assert.equal(commandMessages.length, 0);
+  assert.equal(customCalls, 1);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-agents/);
   assert.equal(notifications.at(-1)?.message, "Loaded Pantheon specialist guide into the editor.");

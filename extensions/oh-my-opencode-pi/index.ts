@@ -3021,13 +3021,16 @@ export default function (pi: ExtensionAPI) {
 
   async function handlePantheonAgentsCommand(_args: string, ctx: ExtensionContext) {
     const { agents, projectAgentsDir } = discoverPantheonAgents(ctx.cwd, true);
+    const publicAgentCount = agents.filter((agent) => !["councillor", "council-master"].includes(agent.name)).length;
+    const summary = `Specialist guide for ${publicAgentCount} public agent${publicAgentCount === 1 ? "" : "s"}`;
     const report = buildPantheonAgentsReport(agents, projectAgentsDir);
     presentPantheonCommandEditorOutput("/pantheon-agents", report, ctx, {
-      summary: `Specialist guide for ${agents.filter((agent) => !["councillor", "council-master"].includes(agent.name)).length} public agent${agents.filter((agent) => !["councillor", "council-master"].includes(agent.name)).length === 1 ? "" : "s"}`,
+      summary,
       notifyMessage: "Loaded Pantheon specialist guide into the editor.",
       status: "success",
       modes: ["widget-summary", "editor-report", "notify"],
     });
+    await showPantheonReportModal(ctx, "Specialist guide", summary, report);
   }
 
   async function handlePantheonSkillsCommand(_args: string, ctx: ExtensionContext) {
