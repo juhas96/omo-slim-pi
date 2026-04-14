@@ -160,15 +160,12 @@ test("pantheon-agents posts a specialist guide to the editor/widget surfaces", a
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Pantheon specialist guide/);
-  assert.match(editorWrites[0] ?? "", /Fixer \[bundled\]/);
-  assert.match(editorWrites[0] ?? "", /Best for: Clear, implementation-heavy tasks/);
+  assert.equal(editorWrites.length, 0);
   assert.equal(commandMessages.length, 0);
   assert.equal(customCalls, 1);
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-agents/);
-  assert.equal(notifications.at(-1)?.message, "Loaded Pantheon specialist guide into the editor.");
+  assert.equal(notifications.at(-1)?.message, "Opened Pantheon specialist guide.");
 });
 
 test("pantheon command center routes advanced actions through a secondary menu without injecting slash commands into chat", async () => {

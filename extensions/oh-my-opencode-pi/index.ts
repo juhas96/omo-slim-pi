@@ -3026,9 +3026,9 @@ export default function (pi: ExtensionAPI) {
     const report = buildPantheonAgentsReport(agents, projectAgentsDir);
     presentPantheonCommandEditorOutput("/pantheon-agents", report, ctx, {
       summary,
-      notifyMessage: "Loaded Pantheon specialist guide into the editor.",
+      notifyMessage: "Opened Pantheon specialist guide.",
       status: "success",
-      modes: ["widget-summary", "editor-report", "notify"],
+      modes: ["widget-summary", "notify"],
     });
     await showPantheonReportModal(ctx, "Specialist guide", summary, report);
   }
