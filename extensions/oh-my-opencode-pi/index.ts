@@ -151,6 +151,10 @@ import {
   buildPantheonActivityDescription,
   buildPantheonAgentsReport,
   buildPantheonDelegateRationale,
+  buildPantheonQuickHelpReport,
+  buildPantheonSpecialistPickerDescription,
+  buildPantheonSpecialistPickerLabel,
+  buildPantheonSubagentInspectorLabel,
   describePantheonSpecialist,
   getPantheonSpecialistGuide,
 } from "./specialists.js";
@@ -650,7 +654,7 @@ function buildSubagentInspectorSnapshot(activity: SubagentActivityState | undefi
     title: activity.title,
     subtitle: activity.subtitle,
     entries: activity.entries.map((entry) => ({
-      label: entry.label,
+      label: buildPantheonSubagentInspectorLabel(entry.label, entry.result.agent),
       description: buildSubagentActivityPreview(entry.result),
       expandedLines: buildSubagentExpandedLines(entry, { stdoutLines: 5, stderrLines: 3 }),
       traceAvailable: Boolean(entry.result.debugTraceId),
@@ -676,11 +680,32 @@ function renderSubagentActivityLines(
     lines.push(fg("dim", "Waiting for subagent activity…"));
     return lines;
   }
+
+  const allCouncilMembers = options.entries.length > 0 && options.entries.every((entry) => entry.result.agent === "councillor");
+  const allCouncilComplete = options.entries.length > 0 && options.entries.every((entry) => ["councillor", "council-master"].includes(entry.result.agent));
+  if (allCouncilMembers && options.subtitle?.includes("member perspectives")) {
+    lines.push(fg("dim", `${options.entries.length} council member perspective${options.entries.length === 1 ? "" : "s"} ready`));
+    lines.push(fg("dim", "Inspect live detail: /pantheon-subagents"));
+    return lines;
+  }
+  if (allCouncilComplete && options.subtitle?.includes("complete")) {
+    const memberCount = options.entries.filter((entry) => entry.result.agent === "councillor").length;
+    const synthesisReady = options.entries.some((entry) => entry.result.agent === "council-master");
+    lines.push(fg("success", `${memberCount} council member perspective${memberCount === 1 ? "" : "s"} ready${synthesisReady ? " + synthesis ready" : ""}`));
+    lines.push(fg("dim", "Inspect live detail: /pantheon-subagents"));
+    return lines;
+  }
+
   for (const entry of options.entries) {
     const state = getResultState(entry.result);
     lines.push(
       `${theme.fg(state.color, state.icon)} ${theme.fg("accent", entry.label)} ${theme.fg("muted", "—")} ${theme.fg("muted", buildSubagentActivityPreview(entry.result))}`,
     );
+    const rationale = buildPantheonDelegateRationale(entry.result.agent);
+    const guide = getPantheonSpecialistGuide(entry.result.agent);
+    if (rationale && !guide?.internal && options.entries.length <= 2) {
+      lines.push(`  ${theme.fg("dim", "why:")} ${theme.fg("muted", rationale)}`);
+    }
   }
   lines.push(fg("dim", "Inspect live detail: /pantheon-subagents"));
   return lines;
@@ -864,7 +889,7 @@ function renderDelegateCall(args: {
   if (args.chain?.length) {
     const lines = [
       `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", `chain (${args.chain.length})`)}`,
-      ...args.chain.slice(0, 5).map((step, index) => `  ${theme.fg("muted", `${index + 1}.`)} ${theme.fg("accent", step.agent)} ${theme.fg("muted", previewText(step.task, 72))}`),
+      ...args.chain.slice(0, 5).map((step, index) => `  ${theme.fg("muted", `${index + 1}.`)} ${theme.fg("accent", buildPantheonSpecialistPickerLabel(step.agent))} ${theme.fg("muted", previewText(step.task, 72))}`),
     ];
     if (args.chain.length > 5) lines.push(`  ${theme.fg("muted", `… +${args.chain.length - 5} more`)}`);
     return new Text(lines.join("\n"), 0, 0);
@@ -873,7 +898,7 @@ function renderDelegateCall(args: {
   if (args.tasks?.length) {
     const lines = [
       `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", `parallel (${args.tasks.length})`)}`,
-      ...args.tasks.slice(0, 5).map((task) => `  ${theme.fg("muted", "•")} ${theme.fg("accent", task.agent)} ${theme.fg("muted", previewText(task.task, 72))}`),
+      ...args.tasks.slice(0, 5).map((task) => `  ${theme.fg("muted", "•")} ${theme.fg("accent", buildPantheonSpecialistPickerLabel(task.agent))} ${theme.fg("muted", previewText(task.task, 72))}`),
     ];
     if (args.tasks.length > 5) lines.push(`  ${theme.fg("muted", `… +${args.tasks.length - 5} more`)}`);
     return new Text(lines.join("\n"), 0, 0);
@@ -881,7 +906,7 @@ function renderDelegateCall(args: {
 
   const rationale = buildPantheonDelegateRationale(args.agent);
   const lines = [
-    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", args.agent || "specialist")}`,
+    `${theme.fg("toolTitle", theme.bold("pantheon_delegate"))} ${theme.fg("accent", buildPantheonSpecialistPickerLabel(args.agent || "specialist"))}`,
     `  ${theme.fg("muted", previewText(args.task || "", 90))}`,
     ...(rationale ? [`  ${theme.fg("dim", "why:")} ${theme.fg("muted", rationale)}`] : []),
   ];
@@ -908,7 +933,7 @@ function renderDelegateResult(
   for (const item of results) {
     lines.push(formatResultLine(item, theme, expanded ? 180 : 110));
     const rationale = buildPantheonDelegateRationale(item.agent);
-    if (rationale && (expanded || details.mode === "single")) {
+    if (rationale) {
       lines.push(`  ${theme.fg("dim", "why:")} ${theme.fg("muted", rationale)}`);
     }
     if (expanded) {
@@ -951,16 +976,16 @@ function renderCouncilResult(
     summarizeResultStates([...details.councillors, details.master], theme),
   ];
   for (const councillor of details.councillors) {
-    lines.push(formatResultLine({ ...councillor, agent: councillor.memberName }, theme, expanded ? 180 : 90));
+    lines.push(formatResultLine({ ...councillor, agent: `member ${councillor.memberName}` }, theme, expanded ? 180 : 90));
     if (expanded) {
-      for (const detail of buildSubagentExpandedLines({ label: councillor.memberName, result: councillor }, { stdoutLines: 3, stderrLines: 2 })) {
+      for (const detail of buildSubagentExpandedLines({ label: `${councillor.memberName} · council member`, result: councillor }, { stdoutLines: 3, stderrLines: 2 })) {
         lines.push(`  ${theme.fg("muted", detail)}`);
       }
     }
   }
-  lines.push(formatResultLine({ ...details.master, agent: "master" }, theme, expanded ? 220 : 110));
+  lines.push(formatResultLine({ ...details.master, agent: "council synthesis" }, theme, expanded ? 220 : 110));
   if (expanded) {
-    for (const detail of buildSubagentExpandedLines({ label: "master", result: details.master }, { stdoutLines: 3, stderrLines: 2 })) {
+    for (const detail of buildSubagentExpandedLines({ label: "master · council synthesis", result: details.master }, { stdoutLines: 3, stderrLines: 2 })) {
       lines.push(`  ${theme.fg("muted", detail)}`);
     }
   }
@@ -2536,7 +2561,7 @@ async function runCouncil(
           runningResults[index] = { ...current, memberName: member.name };
           const completed = runningResults.filter(Boolean).length;
           onUpdate?.({
-            content: [{ type: "text", text: `Council (${resolvedPresetName}): ${completed}/${members.length} councillors responded...` }],
+            content: [{ type: "text", text: `Council members (${resolvedPresetName}): ${completed}/${members.length} responded...` }],
             details: { preset: resolvedPresetName, councillors: runningResults.filter(Boolean) },
           });
         }
@@ -3018,6 +3043,12 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("oh-my-opencode-pi-edit-rescue", `Rescued tolerant edit match for ${input.path}`);
     }
   });
+
+  async function handlePantheonSpecialistHelp(ctx: ExtensionContext) {
+    const { agents } = discoverPantheonAgents(ctx.cwd, true);
+    const report = buildPantheonQuickHelpReport(agents);
+    await showPantheonReportModal(ctx, "Which specialist should I use?", "Pantheon specialist quick help", report);
+  }
 
   async function handlePantheonAgentsCommand(_args: string, ctx: ExtensionContext) {
     const { agents, projectAgentsDir } = discoverPantheonAgents(ctx.cwd, true);
@@ -3527,14 +3558,15 @@ export default function (pi: ExtensionAPI) {
     const discovery = discoverPantheonAgents(ctx.cwd, true);
     const agentName = await showPantheonSelect(
       ctx,
-      "Choose specialist",
+      "Choose specialist — investigate, research, decide, design, or implement",
       discovery.agents
         .filter((agent) => !["councillor", "council-master"].includes(agent.name))
         .map((agent) => ({
           value: agent.name,
-          label: agent.name,
-          description: `${describePantheonSpecialist(agent.name, agent.description)} [${agent.source}]`,
+          label: buildPantheonSpecialistPickerLabel(agent.name),
+          description: `${buildPantheonSpecialistPickerDescription(agent.name, describePantheonSpecialist(agent.name, agent.description))} [${agent.source}]`,
         })),
+      "↑↓ navigate • enter select • esc cancel • use Help in /pantheon if you are unsure",
     );
     if (!agentName) return;
     const task = await ctx.ui.input("Delegation task", `Task for ${agentName}`);
@@ -3684,7 +3716,8 @@ export default function (pi: ExtensionAPI) {
       const recommendedValues = new Set(recommendedItems.map((item) => item.value));
       let action = await showPantheonSelect(ctx, "Pantheon — choose next move", [
         ...recommendedItems,
-        { value: "delegate", label: "Start work · Delegate to specialist", description: "Choose Explorer, Librarian, Oracle, Designer, or Fixer with role guidance." },
+        { value: "delegate", label: "Start work · Delegate to specialist", description: "Choose the right lane: investigate, research, decide, design, or implement." },
+        { value: "help-specialist", label: "Help · Which specialist should I use?", description: "Open a quick Pantheon guide for choosing Explorer, Librarian, Oracle, Designer, Fixer, or Council." },
         { value: "council", label: "Start work · Ask council", description: "Get multiple perspectives and a synthesized recommendation." },
         { value: "review", label: "Review · Review code changes", description: "Launch the structured diff review helper for local changes, commits, or pull requests." },
         { value: "spec-studio", label: "Plan · Open spec studio", description: "Create an editor-first brief for feature, refactor, investigation, or incident work." },
@@ -3721,6 +3754,10 @@ export default function (pi: ExtensionAPI) {
 
       if (action === "agents") {
         await handlePantheonAgentsCommand("", ctx);
+        return;
+      }
+      if (action === "help-specialist") {
+        await handlePantheonSpecialistHelp(ctx);
         return;
       }
       if (action === "review") {
@@ -5152,13 +5189,13 @@ export default function (pi: ExtensionAPI) {
             if (partialCouncil?.councillors?.length) {
               setSubagentActivityWidget(ctx, {
                 title: "Pantheon subagents",
-                subtitle: `council ${partialCouncil.preset ?? params.preset ?? "default"} · councillors`,
+                subtitle: `council ${params.preset ?? partialCouncil.preset ?? "default"} · member perspectives`,
                 entries: partialCouncil.councillors.map((item) => ({ label: item.memberName, result: item })),
               });
             } else if (current) {
               setSubagentActivityWidget(ctx, {
                 title: "Pantheon subagents",
-                subtitle: `council ${params.preset ?? "default"} · master`,
+                subtitle: `council ${params.preset ?? "default"} · synthesis`,
                 entries: [{ label: "master", result: current }],
               });
             }
@@ -5170,14 +5207,15 @@ export default function (pi: ExtensionAPI) {
         const footer = council.councillors.map((result) => `${result.memberName}: ${result.model ?? "default"}`).join(", ");
         setSubagentActivityWidget(ctx, {
           title: "Pantheon subagents",
-          subtitle: `council ${council.preset}`,
+          subtitle: `council ${params.preset ?? council.preset} · complete`,
           entries: [
             ...council.councillors.map((item) => ({ label: item.memberName, result: item })),
             { label: "master", result: council.master },
           ],
         });
         const abortLine = council.master.abortReason ? `\nAbort reason: ${council.master.abortReason}` : "";
-        const text = `${summarizeResult(council.master)}${abortLine}\n\n---\nCouncil preset: ${council.preset}\nCouncillors: ${footer}`;
+        const displayedPreset = params.preset ?? council.preset;
+        const text = `${summarizeResult(council.master)}${abortLine}\n\n---\nCouncil preset: ${displayedPreset}\nCouncil members: ${footer}`;
         const masterFailed = !isSuccessfulResult(council.master, { allowEmpty: config.fallback?.retryOnEmpty === false });
         updateDebugTraceSummary(debugTrace, { finishedAt: Date.now(), status: masterFailed ? "error" : "completed", council });
 

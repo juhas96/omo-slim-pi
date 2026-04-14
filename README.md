@@ -75,6 +75,7 @@ Use Pantheon from the outside in:
 
 2. **Try one bounded task**
    - choose **Start work · Delegate to specialist**
+   - if you're unsure, use **Help · Which specialist should I use?** in `/pantheon`
    - ask Explorer or Fixer a small, concrete question
 
 3. **Inspect the result**
@@ -100,7 +101,7 @@ Pantheon uses a few consistent surfaces:
 ### Helpful first actions
 
 ```text
-/pantheon                 # simplified command center
+/pantheon                 # simplified command center (+ specialist quick help)
 /pantheon-council         # high-confidence multi-model decision
 /review                   # structured review helper
 /pantheon-task-actions    # inspect/retry/cancel/attach from one task menu

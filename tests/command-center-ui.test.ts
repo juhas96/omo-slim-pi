@@ -122,7 +122,7 @@ test("review command rejects unsupported review modes", async () => {
   assert.match(notifications[0]?.message ?? "", /Usage: \/review/);
 });
 
-test("pantheon-agents posts a specialist guide to the editor/widget surfaces", async () => {
+test("pantheon-agents opens the specialist guide without pushing content into chat or editor surfaces", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-agents-"));
   const projectDir = path.join(tempRoot, "project");
   fs.mkdirSync(projectDir, { recursive: true });
@@ -166,6 +166,42 @@ test("pantheon-agents posts a specialist guide to the editor/widget surfaces", a
   assert.ok(widgetWrites.length > 0);
   assert.match(widgetWrites.at(-1)?.join("\n") ?? "", /\/pantheon-agents/);
   assert.equal(notifications.at(-1)?.message, "Opened Pantheon specialist guide.");
+});
+
+test("pantheon command center can open specialist quick-help without injecting slash commands into chat", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-command-specialist-help-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  const sentMessages: string[] = [];
+  const notifications: Array<{ message: string; level?: string }> = [];
+  const commands = registerCommands(sentMessages);
+  const pantheonCommand = commands.get("pantheon");
+  assert.ok(pantheonCommand?.handler);
+
+  let customCalls = 0;
+  const editorWrites: string[] = [];
+  await pantheonCommand.handler("", {
+    cwd: projectDir,
+    hasUI: true,
+    ui: {
+      custom: async () => (++customCalls === 1 ? "help-specialist" : null),
+      notify(message: string, level?: string) {
+        notifications.push({ message, level });
+      },
+      setEditorText(text: string) {
+        editorWrites.push(text);
+      },
+      setStatus() {},
+      setWidget() {},
+      input: async () => "",
+    },
+  });
+
+  assert.equal(sentMessages.length, 0);
+  assert.equal(customCalls, 2);
+  assert.equal(editorWrites.length, 0);
+  assert.equal(notifications.length, 0);
 });
 
 test("pantheon command center routes advanced actions through a secondary menu without injecting slash commands into chat", async () => {

@@ -46,6 +46,7 @@ Good fits:
 
 Start with:
 - `/pantheon` → the default launcher for start/resume/tasks/troubleshooting
+- use **Help · Which specialist should I use?** inside `/pantheon` when you're unsure how to route work
 - `/pantheon-task-actions <taskId>` → one menu for watch/result/log/retry/attach/cancel
 - `/pantheon-resume` → persisted todos + recent background context
 - `/pantheon-overview` → workflow + background state together when you need the fuller expert view
@@ -167,10 +168,11 @@ Preferred order in most cases:
 
 ### Implementing a bounded change
 
-1. delegate to `explorer` if you need reconnaissance
-2. delegate to `fixer` for implementation
-3. run diagnostics/tests
-4. inspect `/pantheon-subagents` if the result looks suspicious
+1. if you're unsure, open `/pantheon` and use **Help · Which specialist should I use?**
+2. delegate to `explorer` if you need reconnaissance
+3. delegate to `fixer` for implementation
+4. run diagnostics/tests
+5. inspect `/pantheon-subagents` if the result looks suspicious
 
 ### Making a risky decision
 
