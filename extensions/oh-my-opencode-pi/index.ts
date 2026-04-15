@@ -127,6 +127,7 @@ import {
   renderWorkflowToolResult,
   showPantheonReportModal,
   showPantheonSelect,
+  showPantheonSidebar,
   showPantheonSubagentInspector,
 } from "./ui.js";
 import {
@@ -3407,6 +3408,45 @@ export default function (pi: ExtensionAPI) {
     updatePantheonDashboard(ctx, config);
   }
 
+  async function handlePantheonSidebarCommand(_args: string, ctx: ExtensionContext) {
+    if (!ctx.hasUI) {
+      ctx.ui.notify("/pantheon-sidebar requires interactive mode", "error");
+      return;
+    }
+    const getSnapshot = () => {
+      const configResult = loadPantheonConfig(ctx.cwd);
+      latestConfig = configResult.config;
+      latestWarningCount = configResult.warnings.length;
+      const taskDir = ensureDir(configResult.config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
+      reconcileBackgroundTasks(taskDir, configResult.config.multiplexer, configResult.config.background?.staleAfterMs ?? 20000);
+      const tasks = configResult.config.background?.enabled === false ? [] : maybeStartQueuedTasks(ctx.cwd, taskDir);
+      const state = configResult.config.workflow?.persistTodos === false
+        ? { updatedAt: 0, uncheckedTodos: [] }
+        : readWorkflowState(ctx.cwd, configResult.config);
+      return {
+        config: configResult.config,
+        state,
+        tasks,
+        autoContinueEnabled,
+        configWarnings: configResult.warnings.length,
+      };
+    };
+
+    const action = await showPantheonSidebar(ctx, getSnapshot);
+    if (!action) return;
+    if (action.action === "overview") {
+      await handlePantheonOverviewCommand("", ctx);
+      return;
+    }
+    if (action.action === "launcher") {
+      ctx.ui.notify("Sidebar closed. Run /pantheon to reopen the launcher.", "info");
+      return;
+    }
+    if (action.action === "task-actions" && action.taskId) {
+      await handlePantheonBackgroundActionsCommand(action.taskId, ctx);
+    }
+  }
+
   async function handlePantheonResumeCommand(_args: string, ctx: ExtensionContext) {
     const config = loadPantheonConfig(ctx.cwd).config;
     const taskDir = ensureDir(config.background?.logDir ?? path.join(process.cwd(), ".oh-my-opencode-pi-tasks"));
@@ -3689,6 +3729,7 @@ export default function (pi: ExtensionAPI) {
     handlePantheonResultCommand,
     handlePantheonTodosCommand,
     handlePantheonOverviewCommand,
+    handlePantheonSidebarCommand,
     handlePantheonResumeCommand,
     handlePantheonRetryCommand,
     handlePantheonBackgroundActionsCommand,
@@ -3739,6 +3780,7 @@ export default function (pi: ExtensionAPI) {
           { value: "skills", label: "Setup · Skills guidance", description: "Show skill policy guidance and a starter config snippet." },
           { value: "adapter-health", label: "Setup · Adapter health", description: "Inspect adapter auth/readiness before relying on external research sources." },
           { value: "overview", label: "Inspect · Workflow overview", description: "See workflow state and background task activity together." },
+          { value: "sidebar", label: "Inspect · Sidebar overlay", description: "Open an experimental right-side Pantheon overlay." },
           { value: "watch", label: "Inspect · Watch background task", description: "Open live metadata plus a recent log tail for a detached task." },
           { value: "result", label: "Inspect · Background task result", description: "Open the latest result summary for a detached task." },
           { value: "attach", label: "Inspect · Attach task pane", description: "Open or reopen a tmux pane for a running task log." },
@@ -3813,6 +3855,10 @@ export default function (pi: ExtensionAPI) {
       }
       if (action === "overview") {
         await handlePantheonOverviewCommand("", ctx);
+        return;
+      }
+      if (action === "sidebar") {
+        await handlePantheonSidebarCommand("", ctx);
         return;
       }
       if (action === "resume") {

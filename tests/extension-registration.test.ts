@@ -74,6 +74,7 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(!commands.includes("interview"));
   assert.ok(commands.includes("pantheon-multiplexer"));
   assert.ok(commands.includes("pantheon-task-actions"));
+  assert.ok(commands.includes("pantheon-sidebar"));
   assert.ok(commands.includes("pantheon-watch"));
   assert.ok(commands.includes("pantheon-bootstrap"));
   assert.ok(commands.includes("pantheon-adapters"));

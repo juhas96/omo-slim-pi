@@ -1,0 +1,24 @@
+[selectedBg]<text> **Pantheon** · sidebar prototype </text>[/selectedBg]
+<warning>**Overlay demo — not a native docked sidebar**</warning>
+<error>failed 1</error><dim> • </dim><accent>running 1</accent><dim> • </dim><muted>queued 1</muted><dim> • </dim><accent>todos 3</accent><dim> • </dim><warning>warnings 2</warning><dim> • </dim><success>auto on</success>
+
+<error>**Focus**</error>
+<dim>bg-3 librarian [failed]</dim> <muted>—</muted> Read docs
+<dim>next:</dim> <accent>/pantheon-task-actions bg-3</accent>
+
+<accent>**Tasks**</accent>
+• <error>failed</error> <accent>librarian</accent> <dim>bg-3</dim> <muted>—</muted> Read docs
+• <accent>running</accent> <accent>fixer</accent> <dim>bg-1</dim> <muted>—</muted> Implement thing
+<dim>… +1 more task</dim>
+
+<accent>**Todos**</accent>
+<dim>○</dim> First todo item
+<dim>○</dim> Second todo item
+<dim>… +1 more todo</dim>
+
+<accent>**Keys**</accent>
+<accent>o</accent> overview report
+<accent>p</accent> Pantheon launcher
+<accent>t</accent> task actions for bg-3
+<accent>r</accent> refresh
+<accent>q / Esc</accent> close

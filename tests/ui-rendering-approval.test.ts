@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { renderBackgroundResult, renderBackgroundWatch } from "../extensions/oh-my-opencode-pi/background.ts";
 import { buildConfigReport, buildAdapterPolicyReport, buildDoctorReport } from "../extensions/oh-my-opencode-pi/reports.ts";
-import { buildPantheonCommandOutputLines, buildPantheonDashboardLines, buildPantheonReportModalLines, buildPantheonSelectChromeLines, buildPantheonSubagentInspectorLines } from "../extensions/oh-my-opencode-pi/ui.ts";
+import { buildPantheonCommandOutputLines, buildPantheonDashboardLines, buildPantheonReportModalLines, buildPantheonSelectChromeLines, buildPantheonSidebarLines, buildPantheonSubagentInspectorLines } from "../extensions/oh-my-opencode-pi/ui.ts";
 
 function fixture(name: string): string {
   return fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", name), "utf8");
@@ -66,6 +66,23 @@ test("Pantheon UI renderers match approval fixtures", () => {
       2,
     ).join("\n");
     assert.equal(dashboard, fixture("dashboard-widget.txt"));
+
+    const sidebar = buildPantheonSidebarLines({
+      fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+      bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
+      bold: (text: string) => `**${text}**`,
+    }, {
+      config: { ui: { maxTodos: 2, maxBackgroundTasks: 2 }, background: { staleAfterMs: 20_000 } },
+      state: { updatedAt: 1_700_000_000_000, uncheckedTodos: ["First todo item", "Second todo item", "Third todo item"] },
+      tasks: [
+        { id: "bg-1", agent: "fixer", task: "Implement thing", status: "running", createdAt: 1_699_999_990_000, startedAt: 1_699_999_995_000, logPath: "a", resultPath: "a" },
+        { id: "bg-2", agent: "explorer", task: "Map repo structure", status: "queued", createdAt: 1_699_999_980_000, logPath: "b", resultPath: "b" },
+        { id: "bg-3", agent: "librarian", task: "Read docs", status: "failed", createdAt: 1_699_999_970_000, logPath: "c", resultPath: "c" },
+      ],
+      autoContinueEnabled: true,
+      configWarnings: 2,
+    }).join("\n");
+    assert.equal(sidebar, fixture("sidebar-overlay.txt"));
 
     const subagentInspector = buildPantheonSubagentInspectorLines({
       fg: (color: string, text: string) => `<${color}>${text}</${color}>`,

@@ -21,6 +21,7 @@ interface CommandRegistryHandlers {
   handlePantheonResultCommand: CommandHandler;
   handlePantheonTodosCommand: CommandHandler;
   handlePantheonOverviewCommand: CommandHandler;
+  handlePantheonSidebarCommand: CommandHandler;
   handlePantheonResumeCommand: CommandHandler;
   handlePantheonRetryCommand: CommandHandler;
   handlePantheonBackgroundActionsCommand: CommandHandler;
@@ -107,6 +108,11 @@ export function registerPantheonNamedCommands(registerCommand: RegisterCommand, 
   registerCommand("pantheon-overview", {
     description: "Show combined Pantheon workflow and background overview",
     handler: handlers.handlePantheonOverviewCommand,
+  });
+
+  registerCommand("pantheon-sidebar", {
+    description: "Open an experimental right-side Pantheon overlay sidebar",
+    handler: handlers.handlePantheonSidebarCommand,
   });
 
   registerCommand("pantheon-resume", {
