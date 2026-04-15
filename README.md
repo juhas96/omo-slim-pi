@@ -36,7 +36,7 @@ pi install -l npm:oh-my-opencode-pi@<version>
 
 Standalone installer / bootstrap CLI:
 
-The generated config includes explicit OpenAI defaults for delegated specialists and a `review-board` council preset. The top-level pi session model still comes from pi itself.
+The generated config now inherits your existing pi default provider/model for delegated specialists and council runs. It still enables the `review-board` council preset plus Pantheon-specific adapter/skill defaults. If you later add explicit model overrides, make sure the provider prefix matches your pi auth setup (for example `openai-codex/...` for ChatGPT subscription auth vs `openai/...` for API keys).
 
 Prerequisites for a successful first run:
 
@@ -320,12 +320,12 @@ Minimal example:
   "agents": {
     "oracle": { "model": "anthropic/claude-sonnet-4-5", "variant": "high" },
     "explorer": {
-      "model": "openai/gpt-5.4-mini",
+      "model": "openai-codex/gpt-5.4-mini",
       "allowSkills": ["cartography"],
       "allowedAdapters": ["local-docs", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-5.4-mini",
+      "model": "openai-codex/gpt-5.4-mini",
       "allowedAdapters": ["local-docs", "docs-context7", "npm-registry", "web-search"]
     }
   },
@@ -338,6 +338,8 @@ Minimal example:
   }
 }
 ```
+
+If you use OpenAI API keys instead of ChatGPT/Codex subscription auth, switch the prefix back to `openai/...`.
 
 For the full option map, presets, council config, adapter policy, and schema guidance, see [`docs/configuration.md`](docs/configuration.md).
 

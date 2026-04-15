@@ -52,10 +52,10 @@ Prerequisites before the generated setup is truly usable:
 
 - pi is installed and can load local/global packages
 - at least one provider is configured in pi
-- the generated scaffold defaults delegated specialists to OpenAI models unless you edit them
+- the generated scaffold inherits pi's default provider/model unless you add explicit Pantheon overrides
 - tmux is optional and only needed for multiplexer/background-pane workflows
 
-The generated config includes explicit OpenAI defaults for delegated specialists (`oracle`, `explorer`, `librarian`, `designer`, `fixer`) plus a `review-board` council preset. The top-level pi session model still comes from pi itself.
+The generated config enables a `review-board` council preset plus Pantheon-specific adapter/skill defaults without hard-coding provider-qualified model ids. If you later add explicit model overrides, make sure the provider prefix matches your pi auth setup (for example `openai-codex/...` for ChatGPT subscription auth vs `openai/...` for API keys).
 
 ```bash
 npx oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes

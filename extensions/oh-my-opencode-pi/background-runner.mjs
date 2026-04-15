@@ -250,7 +250,7 @@ async function main() {
     const model = models[index];
     const result = await runAttempt(spec, model);
     const emptyResponse = !hasMeaningfulResult(result);
-    if (emptyResponse && retryOnEmpty && !result.errorMessage) {
+    if (emptyResponse && retryOnEmpty && !result.errorMessage && !result.stderr.trim()) {
       result.errorMessage = "Empty response from provider";
     }
     const ok = result.exitCode === 0

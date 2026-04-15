@@ -209,7 +209,9 @@ async function runDelegateFallbackRecovery(def: OrchestrationScenarioDefinition)
 
 async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition): Promise<OrchestrationScenarioActualResult> {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-eval-council-"));
+  const agentDir = path.join(tempRoot, "agent");
   const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(projectDir, { recursive: true });
   const fakePi = path.join(tempRoot, "fake-pi.mjs");
   fs.writeFileSync(fakePi, `
@@ -226,7 +228,7 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
     }));
   `);
 
-  return withProcessArgv1(fakePi, async () => {
+  return withAgentDir(agentDir, () => withProcessArgv1(fakePi, async () => {
     const commandMessages: Array<{ content?: string; details?: any }> = [];
     const { commands } = registerHarness(commandMessages);
     const command = commands.get("pantheon-council");
@@ -286,7 +288,7 @@ async function runCouncilSynthesisProgress(def: OrchestrationScenarioDefinition)
         partialCount > 0 ? `Observed ${partialCount} partial widget update(s).` : "No partial council progress observed.",
       ],
     };
-  });
+  }));
 }
 
 async function runBackgroundRetryRecovery(def: OrchestrationScenarioDefinition): Promise<OrchestrationScenarioActualResult> {

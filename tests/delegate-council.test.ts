@@ -209,6 +209,8 @@ test("pantheon_delegate reports failures from the subagent runner", async () => 
     const delegateTool = tools.get("pantheon_delegate");
     const result = await delegateTool.execute("call-3", { agent: "fixer", task: "Fail this run" }, undefined, undefined, { cwd: projectDir });
     assert.equal(result.isError, true);
+    assert.match(result.content[0]?.text ?? "", /simulated failure/);
+    assert.doesNotMatch(result.content[0]?.text ?? "", /Empty response from provider/);
   } finally {
     process.argv[1] = originalArgv1;
   }

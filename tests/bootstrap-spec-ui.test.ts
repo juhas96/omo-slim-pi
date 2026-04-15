@@ -36,9 +36,10 @@ test("bootstrap tool scaffolds project-local Pantheon files", async () => {
   const configText = fs.readFileSync(configPath, "utf8");
   assert.ok(fs.existsSync(configPath));
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "pantheon-adapters", "README.md")));
-  assert.match(configText, /"oracle": \{[\s\S]*?"model": "openai\/gpt-5\.4"/);
-  assert.match(configText, /"fixer": \{[\s\S]*?"model": "openai\/gpt-5\.4-mini"/);
+  assert.match(configText, /Pantheon inherits pi's default provider\/model/);
   assert.match(configText, /"defaultPreset": "review-board"/);
+  assert.doesNotMatch(configText, /"oracle": \{[\s\S]*?"model":/);
+  assert.doesNotMatch(configText, /"reviewer", "model":/);
 });
 
 test("spec studio templates provide richer iterative planning outlines", () => {

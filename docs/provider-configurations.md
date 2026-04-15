@@ -24,6 +24,18 @@ Provider/model choice is configured per agent and per council preset. Typical pl
 
 Authentication is handled by pi and the configured provider environment, not by this package itself.
 
+## Match model IDs to your authenticated provider
+
+This is the easiest way to avoid silent council/delegate failures.
+
+Examples:
+
+- `openai-codex/gpt-5.4` → ChatGPT Plus/Pro subscription auth via pi `/login`
+- `openai/gpt-5.4` → OpenAI API key auth via `OPENAI_API_KEY` or `auth.json`
+- `anthropic/claude-sonnet-4-5` → Anthropic API key auth
+
+If the provider prefix in `agents.*.model` or `council.presets.*` does not match the credentials pi actually has, Pantheon subagents can fail before returning any answer.
+
 ---
 
 ## Default-style OpenAI setup
@@ -49,6 +61,38 @@ A straightforward starting point:
           { "name": "reviewer", "model": "openai/gpt-5.4" },
           { "name": "architect", "model": "openai/gpt-5.4-mini", "variant": "medium" },
           { "name": "skeptic", "model": "openai/gpt-5.4-mini", "variant": "medium" }
+        ]
+      }
+    }
+  }
+}
+```
+
+---
+
+## Codex subscription setup
+
+If you authenticated with ChatGPT/Codex in pi, prefer `openai-codex/...` model ids:
+
+```jsonc
+{
+  "extends": ["durable"],
+  "agents": {
+    "oracle": { "model": "openai-codex/gpt-5.4", "variant": "high" },
+    "explorer": { "model": "openai-codex/gpt-5.4-mini", "variant": "low" },
+    "librarian": { "model": "openai-codex/gpt-5.4-mini", "variant": "low" },
+    "designer": { "model": "openai-codex/gpt-5.4-mini", "variant": "medium" },
+    "fixer": { "model": "openai-codex/gpt-5.4-mini", "variant": "low" }
+  },
+  "council": {
+    "defaultPreset": "review-board",
+    "presets": {
+      "review-board": {
+        "master": { "model": "openai-codex/gpt-5.4", "variant": "high" },
+        "councillors": [
+          { "name": "reviewer", "model": "openai-codex/gpt-5.4" },
+          { "name": "architect", "model": "openai-codex/gpt-5.4-mini", "variant": "medium" },
+          { "name": "skeptic", "model": "openai-codex/gpt-5.4-mini", "variant": "medium" }
         ]
       }
     }

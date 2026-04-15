@@ -2,54 +2,25 @@ export function buildPantheonScaffoldConfig({ tmuxEnabled = false, skillsEnabled
   return `{
   "$schema": "../oh-my-opencode-pi.schema.json",
   "extends": ["durable"],
-  // The top-level pi session model stays whatever you selected in pi.
-  // These overrides control delegated Pantheon specialists and council runs.
+  // Pantheon inherits pi's default provider/model unless you add explicit overrides below.
+  // If you do add them, make sure the provider prefix matches your pi auth setup
+  // (for example openai-codex/... for ChatGPT subscription auth vs openai/... for API keys).
   "multiplexer": {
     "tmux": ${tmuxEnabled ? "true" : "false"},
     "layout": "main-vertical",
     "focusOnSpawn": false
   },
   "agents": {
-    "oracle": {
-      "model": "openai/gpt-5.4",
-      "variant": "high"
-    },
     "explorer": {
-      "model": "openai/gpt-5.4-mini",
-      "variant": "low",
       "allowSkills": ${skillsEnabled ? '["cartography"]' : '[]'},
       "allowedAdapters": ["local-docs", "docs-context7", "github-code-search", "web-search"]
     },
     "librarian": {
-      "model": "openai/gpt-5.4-mini",
-      "variant": "low",
       "allowedAdapters": ["local-docs", "docs-context7", "github-releases", "github-code-search", "web-search", "npm-registry"]
-    },
-    "designer": {
-      "model": "openai/gpt-5.4-mini",
-      "variant": "medium"
-    },
-    "fixer": {
-      "model": "openai/gpt-5.4-mini",
-      "variant": "low"
     }
   },
   "council": {
-    "defaultPreset": "review-board",
-    "presets": {
-      "review-board": {
-        "master": {
-          "model": "openai/gpt-5.4",
-          "variant": "high",
-          "prompt": "Prioritize correctness, maintainability, and operational simplicity."
-        },
-        "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-5.4" },
-          { "name": "architect", "model": "openai/gpt-5.4-mini", "variant": "medium" },
-          { "name": "skeptic", "model": "openai/gpt-5.4-mini", "variant": "medium" }
-        ]
-      }
-    }
+    "defaultPreset": "review-board"
   },
   "skills": {
     "defaultAllow": ${skillsEnabled ? '["cartography"]' : '[]'},

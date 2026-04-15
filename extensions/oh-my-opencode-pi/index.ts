@@ -1320,7 +1320,7 @@ async function runSingleAgentWithFallback(
       const result = await runSingleAgent(ctxCwd, attemptAgent, task, cwd, step, controller.signal, onUpdate, finalMessageGraceMs, resetAttemptTimeout, debug);
       lastResult = result;
       const emptyResponse = !hasMeaningfulResult(result);
-      if (emptyResponse && retryOnEmpty && !result.errorMessage) {
+      if (emptyResponse && retryOnEmpty && !result.errorMessage && !result.stderr.trim()) {
         result.errorMessage = "Empty response from provider";
       }
       appendDebugEvent(debugTrace, "attempt_finish", {

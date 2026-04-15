@@ -302,6 +302,52 @@ test("background runner avoids CLI --tools when the agent depends on extension t
   }
 });
 
+test("background runner preserves stderr failures instead of masking them as empty responses", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-stderr-"));
+  const agentDir = path.join(tempRoot, "agent");
+  const projectDir = path.join(tempRoot, "project");
+  const taskDir = path.join(tempRoot, "tasks");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(taskDir, { recursive: true });
+
+  fs.writeFileSync(path.join(agentDir, "oh-my-opencode-pi.json"), JSON.stringify({
+    background: { enabled: true, logDir: taskDir, maxConcurrent: 1, reuseSessions: false, heartbeatIntervalMs: 250, staleAfterMs: 5000 },
+    workflow: { persistTodos: false },
+  }, null, 2));
+
+  const badPi = path.join(tempRoot, "bad-pi.mjs");
+  fs.writeFileSync(badPi, `
+    console.error("No API key found for openai.");
+    process.exit(1);
+  `);
+
+  const previous = process.env[AGENT_DIR_ENV];
+  process.env[AGENT_DIR_ENV] = agentDir;
+  try {
+    const task = enqueueBackgroundSpec(projectDir, {
+      agent: "fixer",
+      task: "Fail with stderr only",
+      cwd: projectDir,
+      piCommand: process.execPath,
+      piBaseArgs: [badPi],
+    }, {
+      taskDir,
+      randomId: () => "bg_stderr",
+      maxConcurrent: 1,
+    });
+
+    await waitFor(() => listBackgroundTasks(taskDir).some((entry) => entry.id === task.id && entry.status === "failed"));
+    const failed = listBackgroundTasks(taskDir).find((entry) => entry.id === task.id);
+    assert.equal(failed?.status, "failed");
+    assert.match(failed?.summary ?? "", /No API key found for openai/);
+    assert.doesNotMatch(failed?.summary ?? "", /Empty response from provider/);
+  } finally {
+    if (previous === undefined) delete process.env[AGENT_DIR_ENV];
+    else process.env[AGENT_DIR_ENV] = previous;
+  }
+});
+
 test("cleanup can keep the newest terminal task without counting active jobs", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-background-cleanup-keep-"));
   const taskDir = path.join(tempRoot, "tasks");
