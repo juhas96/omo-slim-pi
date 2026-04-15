@@ -499,6 +499,7 @@ test("pantheon-doctor keeps the health report in editor/widget surfaces", async 
 
   const editorWrites: string[] = [];
   const widgetWrites: string[][] = [];
+  let customCalls = 0;
   await pantheonDoctor.handler("", {
     cwd: projectDir,
     hasUI: true,
@@ -512,7 +513,10 @@ test("pantheon-doctor keeps the health report in editor/widget surfaces", async 
         if (Array.isArray(lines)) widgetWrites.push(lines);
       },
       input: async () => "",
-      custom: async () => null,
+      custom: async () => {
+        customCalls++;
+        return null;
+      },
     },
   });
 
@@ -521,6 +525,7 @@ test("pantheon-doctor keeps the health report in editor/widget surfaces", async 
   assert.match(editorWrites[0] ?? "", /Command: \/pantheon-doctor/);
   assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
+  assert.equal(customCalls, 1);
 });
 
 test("pantheon-task-actions routes task actions through an interactive menu", async () => {

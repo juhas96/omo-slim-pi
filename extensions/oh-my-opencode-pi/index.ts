@@ -3142,14 +3142,16 @@ export default function (pi: ExtensionAPI) {
     });
     const hasError = configResult.diagnostics.some((item) => item.severity === "error") || adapterHealth.some((item) => item.status === "error");
     const hasWarning = configResult.diagnostics.some((item) => item.severity === "warning") || adapterHealth.some((item) => item.status === "warn") || providerAudit.warnings.length > 0 || !process.env.TMUX;
+    const summary = hasError ? "Pantheon doctor found issues" : hasWarning ? "Pantheon doctor found warnings" : "Pantheon doctor passed";
     presentPantheonCommandEditorOutput("/pantheon-doctor", report, ctx, {
-      summary: hasError ? "Pantheon doctor found issues" : hasWarning ? "Pantheon doctor found warnings" : "Pantheon doctor passed",
+      summary,
       notifyMessage: hasError ? "Pantheon doctor found issues." : hasWarning ? "Pantheon doctor found warnings." : "Pantheon doctor passed.",
       status: hasError ? "error" : hasWarning ? "warning" : "success",
       modes: hasError || hasWarning
         ? ["widget-summary", "editor-report", "notify"]
         : ["widget-summary", "editor-report"],
     });
+    await showPantheonReportModal(ctx, "Doctor report", summary, report);
   }
 
   async function handlePantheonHooksCommand(_args: string, ctx: ExtensionContext) {
