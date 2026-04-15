@@ -1,4 +1,5 @@
 import type { PantheonConfigDiagnostic, PantheonConfigLoadResult } from "./config.js";
+import type { PantheonProviderAudit } from "./doctor.js";
 
 function formatList(items: string[] | undefined): string {
   return items && items.length > 0 ? items.join(", ") : "(none)";
@@ -78,10 +79,15 @@ export function buildDoctorReport(args: {
   workflowStatePath: string;
   workflowStateExists: boolean;
   taskCount: number;
+  providerAudit?: PantheonProviderAudit;
 }): string {
   const errors = args.config.diagnostics.filter((item) => item.severity === "error");
   const warnings = args.config.diagnostics.filter((item) => item.severity === "warning");
   const unhealthyAdapters = args.adapterHealth.filter((item) => item.status !== "ok");
+  const providerAudit = args.providerAudit;
+  const providerWarnings = providerAudit?.warnings ?? [];
+  const explicitProviders = [...new Set((providerAudit?.explicitModels ?? []).map((item) => item.provider))];
+  const showProviderAudit = Boolean(providerAudit && ((providerAudit.explicitModels?.length ?? 0) > 0 || providerWarnings.length > 0));
   return [
     "Pantheon doctor report",
     "",
@@ -101,6 +107,15 @@ export function buildDoctorReport(args: {
     `- Multiplexer: ${args.tmuxAvailable ? args.inTmux ? "ok" : "warning" : "warning"}`,
     `- Background storage: ${args.backgroundDirExists ? "ok" : "warning"}`,
     `- Debug artifacts: ${args.debugDirExists ? "ok" : "warning"}`,
+    ...(showProviderAudit ? [`- Provider models: ${providerWarnings.length > 0 ? "warning" : "ok"}`] : []),
+    ...(showProviderAudit ? [
+      "",
+      "Provider auth:",
+      `- Default provider: ${providerAudit!.defaultProvider ?? "(none detected)"}`,
+      `- Auth detected for: ${providerAudit!.authenticatedProviders.join(", ") || "(none detected)"}`,
+      `- Explicit Pantheon providers: ${explicitProviders.join(", ") || "(none configured)"}`,
+      ...(providerWarnings.length > 0 ? ["", "Provider warnings:", ...providerWarnings.map((warning) => `- ${warning}`)] : []),
+    ] : []),
     ...(args.config.diagnostics.length > 0 ? ["", "Config diagnostics:", ...args.config.diagnostics.map(formatDiagnostic)] : []),
     ...(args.adapterHealth.length > 0 ? ["", "Adapter health:", ...args.adapterHealth.map((item) => `- ${item.id} [${item.status}] auth=${item.auth ?? "unknown"} — ${item.summary}`)] : []),
     "",
@@ -111,7 +126,8 @@ export function buildDoctorReport(args: {
     ...(args.tmuxAvailable && !args.inTmux ? ["- Start pi inside tmux to use /pantheon-attach and shared background panes."] : []),
     ...(!args.backgroundDirExists ? ["- Run a background task once to create the task directory, or create it manually if desired."] : []),
     ...(unhealthyAdapters.length > 0 ? ["- Run /pantheon-adapter-health for focused adapter readiness details."] : []),
-    ...(args.config.diagnostics.length === 0 && unhealthyAdapters.length === 0 && args.backgroundDirExists ? ["- Pantheon looks healthy. Use /pantheon-overview or /pantheon-backgrounds for ongoing monitoring."] : []),
+    ...(providerWarnings.length > 0 ? ["- Align explicit Pantheon model prefixes with a provider pi is authenticated for, or remove those overrides to inherit pi defaults."] : []),
+    ...(args.config.diagnostics.length === 0 && unhealthyAdapters.length === 0 && providerWarnings.length === 0 && args.backgroundDirExists ? ["- Pantheon looks healthy. Use /pantheon-overview or /pantheon-backgrounds for ongoing monitoring."] : []),
   ].join("\n");
 }
 

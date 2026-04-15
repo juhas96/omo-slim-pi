@@ -136,6 +136,7 @@ import {
   type AdapterInvocationLike as AdapterInvocationParams,
 } from "./adapter-selection.js";
 import { buildAdapterPolicyReport, buildConfigReport, buildDoctorReport } from "./reports.js";
+import { auditPantheonProviderConfiguration } from "./doctor.js";
 import {
   PANTHEON_COMMAND_MESSAGE_TYPE,
   presentPantheonCommandEditorOutput as presentPantheonCommandEditorOutputBase,
@@ -3122,6 +3123,7 @@ export default function (pi: ExtensionAPI) {
       : resolveDebugLogDir(ctx.cwd, config);
     const workflowStatePath = resolveWorkflowStatePath(ctx.cwd, config);
     const taskCount = fs.existsSync(backgroundDir) ? listBackgroundTasks(backgroundDir).length : 0;
+    const providerAudit = auditPantheonProviderConfiguration(config);
     const report = buildDoctorReport({
       cwd: ctx.cwd,
       config: configResult,
@@ -3135,9 +3137,10 @@ export default function (pi: ExtensionAPI) {
       workflowStatePath,
       workflowStateExists: fs.existsSync(workflowStatePath),
       taskCount,
+      providerAudit,
     });
     const hasError = configResult.diagnostics.some((item) => item.severity === "error") || adapterHealth.some((item) => item.status === "error");
-    const hasWarning = configResult.diagnostics.some((item) => item.severity === "warning") || adapterHealth.some((item) => item.status === "warn") || !process.env.TMUX;
+    const hasWarning = configResult.diagnostics.some((item) => item.severity === "warning") || adapterHealth.some((item) => item.status === "warn") || providerAudit.warnings.length > 0 || !process.env.TMUX;
     presentPantheonCommandEditorOutput("/pantheon-doctor", report, ctx, {
       summary: hasError ? "Pantheon doctor found issues" : hasWarning ? "Pantheon doctor found warnings" : "Pantheon doctor passed",
       notifyMessage: hasError ? "Pantheon doctor found issues." : hasWarning ? "Pantheon doctor found warnings." : "Pantheon doctor passed.",
