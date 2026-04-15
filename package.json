@@ -1,6 +1,6 @@
 {
   "name": "oh-my-opencode-pi",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pantheon-style multi-agent orchestration for pi, inspired by oh-my-opencode-slim",
   "repository": {
     "type": "git",
