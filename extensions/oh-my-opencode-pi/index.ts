@@ -3145,11 +3145,8 @@ export default function (pi: ExtensionAPI) {
     const summary = hasError ? "Pantheon doctor found issues" : hasWarning ? "Pantheon doctor found warnings" : "Pantheon doctor passed";
     presentPantheonCommandEditorOutput("/pantheon-doctor", report, ctx, {
       summary,
-      notifyMessage: hasError ? "Pantheon doctor found issues." : hasWarning ? "Pantheon doctor found warnings." : "Pantheon doctor passed.",
       status: hasError ? "error" : hasWarning ? "warning" : "success",
-      modes: hasError || hasWarning
-        ? ["widget-summary", "editor-report", "notify"]
-        : ["widget-summary", "editor-report"],
+      modes: ["widget-summary", "editor-report"],
     });
     await showPantheonReportModal(ctx, "Doctor report", summary, report);
   }
