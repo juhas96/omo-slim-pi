@@ -3146,7 +3146,7 @@ export default function (pi: ExtensionAPI) {
     presentPantheonCommandEditorOutput("/pantheon-doctor", report, ctx, {
       summary,
       status: hasError ? "error" : hasWarning ? "warning" : "success",
-      modes: ["widget-summary", "editor-report"],
+      modes: ctx.hasUI ? ["widget-summary"] : ["widget-summary", "editor-report"],
     });
     await showPantheonReportModal(ctx, "Doctor report", summary, report);
   }

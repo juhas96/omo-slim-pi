@@ -524,8 +524,7 @@ test("pantheon-doctor keeps the health report in editor/widget surfaces", async 
   });
 
   assert.equal(sentMessages.length, 0);
-  assert.equal(editorWrites.length, 1);
-  assert.match(editorWrites[0] ?? "", /Command: \/pantheon-doctor/);
+  assert.equal(editorWrites.length, 0);
   assert.equal(commandMessages.length, 0);
   assert.ok(widgetWrites.length > 0);
   assert.equal(customCalls, 1);
