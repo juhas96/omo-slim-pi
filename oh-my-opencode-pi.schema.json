@@ -169,7 +169,7 @@
       "additionalProperties": false,
       "properties": {
         "timeoutMs": { "type": "number", "default": 15000 },
-        "userAgent": { "type": "string", "default": "oh-my-opencode-pi/0.3.1" },
+        "userAgent": { "type": "string", "default": "oh-my-opencode-pi/0.3.2" },
         "maxResults": { "type": "number", "default": 5 },
         "githubToken": { "type": "string" },
         "defaultDocsSite": { "type": "string" }
