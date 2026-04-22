@@ -9,7 +9,7 @@ The repository packages:
 - bundled specialist agents and prompt templates
 - a pi extension that registers Pantheon tools, commands, and orchestration hooks
 - a small installer/onboarding CLI
-- a bundled cartography skill
+- bundled coding and repository-mapping skills (`karpathy-guidelines` and `cartography`)
 - tests that exercise the extension surface end-to-end
 - repository documentation describing how the port differs from upstream
 
@@ -22,6 +22,7 @@ The repository packages:
 | `extensions/oh-my-opencode-pi/index.ts` | Main extension entrypoint; registers tools, commands, hooks, and UI integrations |
 | `agents/*.md` | Bundled Pantheon specialist prompts |
 | `prompts/*.md` | Reusable workflow prompt templates |
+| `skills/karpathy-guidelines/SKILL.md` | Bundled coding-discipline skill |
 | `skills/cartography/SKILL.md` | Bundled repository-mapping skill |
 
 ## Directory map
@@ -31,7 +32,7 @@ The repository packages:
 | [`extensions/oh-my-opencode-pi/`](extensions/oh-my-opencode-pi/codemap.md) | Core extension runtime: config loading, delegation, council, background jobs, adapters, LSP/AST/format tools, UI, stats, workflow state |
 | `agents/` | Bundled orchestrator/specialist prompt definitions |
 | `prompts/` | Slash-prompt templates like `implement`, `scout-and-plan`, and `ask-council` |
-| `skills/cartography/` | Bundled cartography skill plus incremental mapping script |
+| `skills/` | Bundled prompt skills, including `karpathy-guidelines` for coding discipline and `cartography` for repo mapping |
 | `docs/` | User-facing guides mirroring the upstream docs structure, adapted for pi |
 | `tests/` | Behavioral coverage for tools, commands, config loading, adapters, multiplexer behavior, and cartography |
 | `bin/` | CLI entrypoints for install/verify flows |
@@ -42,6 +43,7 @@ The repository packages:
 - Config is deep-merged from global and project-local JSON/JSONC files, then sanitized into a typed runtime config.
 - Background work is persisted to task artifacts on disk and can optionally surface through tmux panes.
 - Research is adapter-based rather than OpenCode-MCP-based.
+- `karpathy-guidelines` is a lightweight behavioral skill used to keep implementation work simple, surgical, and verification-driven.
 - The cartography skill is the preferred user-facing surface for repo mapping; `pantheon_repo_map` and `pantheon_code_map` are the low-level primitives behind it.
 
 ## Typical flow

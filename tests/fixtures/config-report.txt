@@ -27,7 +27,7 @@ Background & multiplexer:
 - Project-scoped window: enabled
 
 Skills & adapters:
-- Default skill allow: cartography
+- Default skill allow: karpathy-guidelines, cartography
 - Default skill deny: (none)
 - Cartography: enabled
 - Adapter default allow: docs-context7

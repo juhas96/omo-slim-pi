@@ -78,7 +78,7 @@ oh-my-opencode-pi verify --cwd /path/to/project
 | `--reset` | Overwrite generated bootstrap files |
 | `--yes` | Reserved for non-interactive automation flows |
 | `--tmux=yes|no` | Enable tmux-based multiplexer integration in the generated config |
-| `--skills=yes|no` | Enable the bundled cartography skill in the generated config |
+| `--skills=yes|no` | Enable the bundled karpathy-guidelines + cartography skills in the generated config |
 
 ---
 
@@ -113,7 +113,8 @@ A good first-run flow is:
 2. run `/pantheon` to open the command center
 3. run `/pantheon-agents` to confirm bundled specialists are loaded and inspect when to use each one
 4. run `/pantheon-skills` to inspect effective skill guidance
-5. if you want repository mapping, run `/skill:cartography`
+5. if you want coding-discipline guardrails immediately, run `/skill:karpathy-guidelines`
+6. if you want repository mapping, run `/skill:cartography`
 6. if you want project-local overrides, run `/pantheon-bootstrap`
 
 If you prefer the tool surface instead of slash commands, the top-level orchestrator can call:

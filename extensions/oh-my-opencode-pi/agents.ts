@@ -100,10 +100,22 @@ function renderPolicyPrompt(cwd: string, agentName: string): string | undefined 
   const skillPolicy = resolveAgentSkillPolicy(config, agentName);
   const adapterPolicy = resolveAgentAdapterPolicy(config, agentName);
   const lines: string[] = [];
+  const deniedSkills = new Set(skillPolicy.deny);
+  const hasSkillAllowlist = skillPolicy.allow.length > 0;
+  const allowedSkills = hasSkillAllowlist
+    ? skillPolicy.allow.filter((skill) => !deniedSkills.has(skill))
+    : [];
+  const isSkillAllowed = (skill: string): boolean => {
+    if (deniedSkills.has(skill)) return false;
+    return !hasSkillAllowlist || allowedSkills.includes(skill);
+  };
 
-  if (skillPolicy.allow.length > 0) lines.push(`Allowed skills: ${skillPolicy.allow.join(", ")}.`);
+  if (allowedSkills.length > 0) lines.push(`Allowed skills: ${allowedSkills.join(", ")}.`);
   if (skillPolicy.deny.length > 0) lines.push(`Disallowed skills: ${skillPolicy.deny.join(", ")}.`);
-  if (skillPolicy.cartographyEnabled && (skillPolicy.allow.length === 0 || skillPolicy.allow.includes("cartography"))) {
+  if (isSkillAllowed("karpathy-guidelines")) {
+    lines.push("Prefer the bundled karpathy-guidelines skill for non-trivial implementation, review, and refactor work: surface assumptions, choose the simplest solution that fits, keep diffs surgical, and define concrete verification before claiming success.");
+  }
+  if (skillPolicy.cartographyEnabled && isSkillAllowed("cartography")) {
     lines.push("Prefer the bundled cartography skill for repository mapping and codemap maintenance. When doing cartography work, use pantheon_repo_map for filesystem reconnaissance and pantheon_code_map for semantic import/symbol mapping.");
   }
 

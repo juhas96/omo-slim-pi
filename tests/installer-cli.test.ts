@@ -17,6 +17,7 @@ test("installer CLI scaffolds project-local Pantheon files and verify passes", (
   const configPath = path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc");
   const configText = fs.readFileSync(configPath, "utf8");
   assert.match(configText, /"tmux": true/);
+  assert.match(configText, /"karpathy-guidelines"/);
   assert.match(configText, /"cartography"/);
   assert.match(configText, /Pantheon inherits pi's default provider\/model/);
   assert.match(configText, /"defaultPreset": "review-board"/);

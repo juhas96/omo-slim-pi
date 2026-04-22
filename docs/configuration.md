@@ -121,7 +121,7 @@ See [council.md](council.md) for usage guidance.
   },
   "skills": {
     "setupHints": true,
-    "defaultAllow": ["cartography"],
+    "defaultAllow": ["karpathy-guidelines", "cartography"],
     "cartography": {
       "enabled": true,
       "maxFiles": 250,

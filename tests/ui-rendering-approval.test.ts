@@ -151,7 +151,7 @@ test("Pantheon UI renderers match approval fixtures", () => {
         autoContinue: { enabled: false, maxContinuations: 5 },
         background: { enabled: true, maxConcurrent: 2, reuseSessions: true, heartbeatIntervalMs: 1500, staleAfterMs: 20000 },
         multiplexer: { tmux: false, projectScopedWindow: true },
-        skills: { defaultAllow: ["cartography"], defaultDeny: [], cartography: { enabled: true } },
+        skills: { defaultAllow: ["karpathy-guidelines", "cartography"], defaultDeny: [], cartography: { enabled: true } },
         adapters: { defaultAllow: ["docs-context7"], defaultDeny: ["github-releases"], disabled: ["grep-app"] },
         agents: { fixer: {}, explorer: {} },
         council: { presets: { default: { councillors: [{ name: "alpha" }] } } },

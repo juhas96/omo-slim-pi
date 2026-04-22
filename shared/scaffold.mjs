@@ -23,7 +23,7 @@ export function buildPantheonScaffoldConfig({ tmuxEnabled = false, skillsEnabled
     "defaultPreset": "review-board"
   },
   "skills": {
-    "defaultAllow": ${skillsEnabled ? '["cartography"]' : '[]'},
+    "defaultAllow": ${skillsEnabled ? '["karpathy-guidelines", "cartography"]' : '[]'},
     "cartography": {
       "enabled": ${skillsEnabled ? "true" : "false"},
       "maxFiles": 250,

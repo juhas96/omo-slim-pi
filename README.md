@@ -226,7 +226,7 @@ Bundled agents:
 | Doc | Contents |
 |-----|----------|
 | [Configuration](docs/configuration.md) | Config files, merge order, presets, overrides, schema usage |
-| [Skills](docs/skills.md) | Bundled cartography skill, policy controls, setup hints |
+| [Skills](docs/skills.md) | Bundled karpathy-guidelines + cartography skills, policy controls, setup hints |
 | [MCPs / Adapters](docs/mcps.md) | Pi-native adapter system that fills the role upstream MCP docs cover |
 | [Tools](docs/tools.md) | Background tasks, LSP, AST-grep, formatting, patch rescue, observability |
 | [Author-style Preset](docs/authors-preset.md) | A practical mixed-provider preset for day-to-day Pantheon usage |
@@ -244,6 +244,7 @@ This pi package ports the most valuable `oh-my-opencode-slim` ideas into pi's na
 - background specialist tasks with status, wait, result, retry, cancel, and attach flows
 - tmux-backed multiplexer support for live background logs
 - structured research through adapters and docs-aware fetch/search helpers, including smart `pantheon_webfetch`
+- behavioral guardrails for non-trivial coding work via a bundled `karpathy-guidelines` skill
 - cartography / codemap workflows via a bundled `cartography` skill
 - workflow-state persistence, auto-continue, and resume helpers
 - richer code intelligence: LSP navigation, rename, organize-imports, format, patch, AST-grep
@@ -408,6 +409,14 @@ See:
 ### Auto-continue + workflow state
 
 The port can persist unchecked todos, auto-continue multi-step work, and generate resume context from previous background activity.
+
+### Behavioral guardrails
+
+The bundled `karpathy-guidelines` skill gives Pantheon agents a reusable behavior layer for non-trivial implementation work: clarify assumptions, prefer the simplest change, keep diffs surgical, and verify before claiming success.
+
+See:
+- [`docs/skills.md`](docs/skills.md)
+- [`skills/karpathy-guidelines/SKILL.md`](skills/karpathy-guidelines/SKILL.md)
 
 ### Repo cartography
 

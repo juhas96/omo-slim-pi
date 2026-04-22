@@ -65,7 +65,7 @@ It uses:
     "councilMaster": ["openai/gpt-5.4"]
   },
   "skills": {
-    "defaultAllow": ["cartography"],
+    "defaultAllow": ["karpathy-guidelines", "cartography"],
     "cartography": {
       "enabled": true,
       "maxFiles": 250,
@@ -91,6 +91,7 @@ It uses:
 - `explorer` and `librarian` stay fast enough for repeated scouting.
 - `designer` gets a model suited to broader UI synthesis.
 - council diversity is real, not cosmetic.
+- karpathy-guidelines is available by default for implementation discipline.
 - cartography is available by default for repo-mapping work.
 - debug traces stay on for postmortems.
 

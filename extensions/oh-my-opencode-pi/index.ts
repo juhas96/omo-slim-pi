@@ -3071,7 +3071,7 @@ export default function (pi: ExtensionAPI) {
     const snippet = JSON.stringify({
       skills: {
         setupHints: true,
-        defaultAllow: ["cartography"],
+        defaultAllow: ["karpathy-guidelines", "cartography"],
         cartography: { enabled: true, maxFiles: 250, maxDepth: 4 },
       },
       agents: {
@@ -3081,14 +3081,16 @@ export default function (pi: ExtensionAPI) {
       },
     }, null, 2);
     const lines = [
+      "Bundled skills: karpathy-guidelines, cartography",
       `Cartography: ${config.skills?.cartography?.enabled === false ? "disabled" : "enabled"}`,
       `Default skills allow: ${(config.skills?.defaultAllow ?? []).join(", ") || "(none)"}`,
       `Default skills deny: ${(config.skills?.defaultDeny ?? []).join(", ") || "(none)"}`,
       `Skill setup hints: ${config.skills?.setupHints === false ? "disabled" : "enabled"}`,
       "",
       "Workflow:",
+      "- Use karpathy-guidelines as the default behavior layer for non-trivial implementation, review, and refactor work.",
       "- Ask the orchestrator to run cartography for repository mapping work.",
-      "- Use /skill:cartography directly when skill commands are enabled.",
+      "- Use /skill:karpathy-guidelines or /skill:cartography directly when skill commands are enabled.",
       "- The cartography skill uses pantheon_repo_map and pantheon_code_map as low-level building blocks rather than dedicated slash commands.",
       "",
       "Starter config snippet:",

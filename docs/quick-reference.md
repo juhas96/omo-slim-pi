@@ -23,7 +23,7 @@
 
 | Doc | Contents |
 |-----|----------|
-| [Skills](skills.md) | Bundled cartography skill, policy controls, setup hints |
+| [Skills](skills.md) | Bundled karpathy-guidelines + cartography skills, policy controls, setup hints |
 | [MCPs / Adapters](mcps.md) | Pi-native adapter system that fills the role upstream MCP docs cover |
 | [Tools](tools.md) | Background tasks, doctor/health checks, LSP, AST-grep, formatting, patch rescue, observability |
 | [Configuration](configuration.md) | Config file locations, merge order, schema/diagnostics, presets, overrides, full option map |
