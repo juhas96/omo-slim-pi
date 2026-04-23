@@ -340,7 +340,7 @@ Minimal example:
 }
 ```
 
-If you use OpenAI API keys instead of ChatGPT/Codex subscription auth, switch the prefix back to `openai/...`.
+If you use OpenAI API keys instead of ChatGPT/Codex subscription auth, switch the prefix back to `openai/...`. Main-model examples use `gpt-5.5`; mini examples remain on `gpt-5.4-mini` until a `gpt-5.5-mini` model exists.
 
 For the full option map, presets, council config, adapter policy, and schema guidance, see [`docs/configuration.md`](docs/configuration.md).
 

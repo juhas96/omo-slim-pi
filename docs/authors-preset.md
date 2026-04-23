@@ -34,7 +34,7 @@ It uses:
       "model": "google/gemini-2.5-pro"
     },
     "fixer": {
-      "model": "openai/gpt-5.4"
+      "model": "openai/gpt-5.5"
     }
   },
   "council": {
@@ -47,7 +47,7 @@ It uses:
           "prompt": "Prioritize correctness, maintainability, and operational simplicity."
         },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-5.4" },
+          { "name": "reviewer", "model": "openai/gpt-5.5" },
           { "name": "architect", "model": "anthropic/claude-sonnet-4-5" },
           { "name": "skeptic", "model": "google/gemini-2.5-pro" }
         ]
@@ -62,7 +62,7 @@ It uses:
       "librarian": ["openai/gpt-5.4-mini"],
       "fixer": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-5.4"]
+    "councilMaster": ["openai/gpt-5.5"]
   },
   "skills": {
     "defaultAllow": ["karpathy-guidelines", "cartography"],

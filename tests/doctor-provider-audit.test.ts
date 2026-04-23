@@ -38,11 +38,11 @@ test("provider audit warns when explicit Pantheon model providers do not match a
   process.env.OPENAI_API_KEY = "";
   try {
     const audit = auditPantheonProviderConfiguration({
-      agents: { oracle: { model: "openai/gpt-5.4" } },
+      agents: { oracle: { model: "openai/gpt-5.5" } },
       council: {
         presets: {
           "review-board": {
-            councillors: [{ name: "reviewer", model: "openai/gpt-5.4" }],
+            councillors: [{ name: "reviewer", model: "openai/gpt-5.5" }],
           },
         },
       },
@@ -52,7 +52,7 @@ test("provider audit warns when explicit Pantheon model providers do not match a
     assert.equal(audit.explicitModels[0]?.provider, "openai");
     assert.match(audit.warnings.join("\n"), /provider 'openai'/);
     assert.match(audit.warnings.join("\n"), /openai-codex/);
-    assert.match(audit.warnings.join("\n"), /agents\.oracle\.model=openai\/gpt-5\.4/);
+    assert.match(audit.warnings.join("\n"), /agents\.oracle\.model=openai\/gpt-5\.5/);
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
@@ -70,7 +70,7 @@ test("provider audit accepts env-authenticated API key providers", () => {
   process.env.OPENAI_API_KEY = "test-key";
   try {
     const audit = auditPantheonProviderConfiguration({
-      agents: { oracle: { model: "openai/gpt-5.4" } },
+      agents: { oracle: { model: "openai/gpt-5.5" } },
     } as never, agentDir);
 
     assert.ok(audit.authenticatedProviders.includes("openai"));
@@ -91,7 +91,7 @@ test("pantheon-doctor surfaces provider mismatch warnings", async () => {
   fs.writeFileSync(path.join(agentDir, "auth.json"), JSON.stringify({ "openai-codex": { type: "oauth" } }, null, 2));
   fs.writeFileSync(path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc"), JSON.stringify({
     agents: {
-      oracle: { model: "openai/gpt-5.4" },
+      oracle: { model: "openai/gpt-5.5" },
     },
   }, null, 2));
 
@@ -125,7 +125,7 @@ test("pantheon-doctor surfaces provider mismatch warnings", async () => {
     assert.match(text, /Provider warnings:/);
     assert.match(text, /provider 'openai'/);
     assert.match(text, /openai-codex/);
-    assert.match(text, /agents\.oracle\.model=openai\/gpt-5\.4/);
+    assert.match(text, /agents\.oracle\.model=openai\/gpt-5\.5/);
   } finally {
     if (previousAgentDir === undefined) delete process.env[AGENT_DIR_ENV];
     else process.env[AGENT_DIR_ENV] = previousAgentDir;

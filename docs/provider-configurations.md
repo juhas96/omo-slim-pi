@@ -30,11 +30,13 @@ This is the easiest way to avoid silent council/delegate failures.
 
 Examples:
 
-- `openai-codex/gpt-5.4` → ChatGPT Plus/Pro subscription auth via pi `/login`
-- `openai/gpt-5.4` → OpenAI API key auth via `OPENAI_API_KEY` or `auth.json`
+- `openai-codex/gpt-5.5` → ChatGPT Plus/Pro subscription auth via pi `/login`
+- `openai/gpt-5.5` → OpenAI API key auth via `OPENAI_API_KEY` or `auth.json`
 - `anthropic/claude-sonnet-4-5` → Anthropic API key auth
 
 If the provider prefix in `agents.*.model` or `council.presets.*` does not match the credentials pi actually has, Pantheon subagents can fail before returning any answer.
+
+Note: these examples move the main OpenAI model to `gpt-5.5`, but keep mini entries on `gpt-5.4-mini` because `gpt-5.5-mini` is not available yet.
 
 ---
 
@@ -46,7 +48,7 @@ A straightforward starting point:
 {
   "extends": ["durable"],
   "agents": {
-    "oracle": { "model": "openai/gpt-5.4", "variant": "high" },
+    "oracle": { "model": "openai/gpt-5.5", "variant": "high" },
     "explorer": { "model": "openai/gpt-5.4-mini", "variant": "low" },
     "librarian": { "model": "openai/gpt-5.4-mini", "variant": "low" },
     "designer": { "model": "openai/gpt-5.4-mini", "variant": "medium" },
@@ -56,9 +58,9 @@ A straightforward starting point:
     "defaultPreset": "review-board",
     "presets": {
       "review-board": {
-        "master": { "model": "openai/gpt-5.4", "variant": "high" },
+        "master": { "model": "openai/gpt-5.5", "variant": "high" },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-5.4" },
+          { "name": "reviewer", "model": "openai/gpt-5.5" },
           { "name": "architect", "model": "openai/gpt-5.4-mini", "variant": "medium" },
           { "name": "skeptic", "model": "openai/gpt-5.4-mini", "variant": "medium" }
         ]
@@ -78,7 +80,7 @@ If you authenticated with ChatGPT/Codex in pi, prefer `openai-codex/...` model i
 {
   "extends": ["durable"],
   "agents": {
-    "oracle": { "model": "openai-codex/gpt-5.4", "variant": "high" },
+    "oracle": { "model": "openai-codex/gpt-5.5", "variant": "high" },
     "explorer": { "model": "openai-codex/gpt-5.4-mini", "variant": "low" },
     "librarian": { "model": "openai-codex/gpt-5.4-mini", "variant": "low" },
     "designer": { "model": "openai-codex/gpt-5.4-mini", "variant": "medium" },
@@ -88,9 +90,9 @@ If you authenticated with ChatGPT/Codex in pi, prefer `openai-codex/...` model i
     "defaultPreset": "review-board",
     "presets": {
       "review-board": {
-        "master": { "model": "openai-codex/gpt-5.4", "variant": "high" },
+        "master": { "model": "openai-codex/gpt-5.5", "variant": "high" },
         "councillors": [
-          { "name": "reviewer", "model": "openai-codex/gpt-5.4" },
+          { "name": "reviewer", "model": "openai-codex/gpt-5.5" },
           { "name": "architect", "model": "openai-codex/gpt-5.4-mini", "variant": "medium" },
           { "name": "skeptic", "model": "openai-codex/gpt-5.4-mini", "variant": "medium" }
         ]
@@ -126,7 +128,7 @@ The pi port works best when you give different specialists different strengths.
       "model": "google/gemini-2.5-pro"
     },
     "fixer": {
-      "model": "openai/gpt-5.4"
+      "model": "openai/gpt-5.5"
     }
   },
   "council": {
@@ -139,7 +141,7 @@ The pi port works best when you give different specialists different strengths.
           "prompt": "Prioritize correctness and simplicity."
         },
         "councillors": [
-          { "name": "reviewer", "model": "openai/gpt-5.4" },
+          { "name": "reviewer", "model": "openai/gpt-5.5" },
           { "name": "architect", "model": "anthropic/claude-sonnet-4-5" },
           { "name": "skeptic", "model": "google/gemini-2.5-pro" }
         ]
@@ -151,7 +153,7 @@ The pi port works best when you give different specialists different strengths.
       "fixer": ["openai/gpt-5.4-mini"],
       "librarian": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-5.4"]
+    "councilMaster": ["openai/gpt-5.5"]
   }
 }
 ```
@@ -207,7 +209,7 @@ Use fallback chains when one model is ideal but you want graceful degradation.
       "explorer": ["openai/gpt-5.4-mini"],
       "librarian": ["openai/gpt-5.4-mini"]
     },
-    "councilMaster": ["openai/gpt-5.4"],
+    "councilMaster": ["openai/gpt-5.5"],
     "finalMessageGraceMs": 1500
   }
 }
