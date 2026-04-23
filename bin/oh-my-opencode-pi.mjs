@@ -9,6 +9,7 @@ function usage() {
 
 Usage:
   oh-my-opencode-pi install [--cwd <dir>] [--global] [--reset] [--yes] [--tmux=yes|no] [--skills=yes|no]
+  oh-my-opencode-pi regenerate [--cwd <dir>] [--global] [--yes] [--tmux=yes|no] [--skills=yes|no]
   oh-my-opencode-pi verify [--cwd <dir>] [--global]
 `);
 }
@@ -45,19 +46,19 @@ function ensureFile(filePath, content, reset) {
   return true;
 }
 
-function install(flags) {
+function install(flags, options = {}) {
   const root = resolveInstallRoot(flags);
   const tmuxEnabled = boolFlag(flags.tmux, false);
   const skillsEnabled = boolFlag(flags.skills, true);
-  const reset = boolFlag(flags.reset, false);
-  const configName = boolFlag(flags.global) ? 'oh-my-opencode-pi.jsonc' : 'oh-my-opencode-pi.jsonc';
+  const reset = options.reset ?? boolFlag(flags.reset, false);
+  const label = options.label ?? 'install';
   const created = [];
   const files = getPantheonScaffoldEntries({ tmuxEnabled, skillsEnabled })
     .map((entry) => [path.join(root, entry.relativePath), entry.content]);
   for (const [filePath, content] of files) {
     if (ensureFile(filePath, content, reset)) created.push(filePath);
   }
-  console.log('Pantheon scaffold install complete');
+  console.log(`Pantheon scaffold ${label} complete`);
   console.log(`Root: ${root}`);
   console.log(`Created: ${created.length}`);
   for (const filePath of created) console.log(`- ${filePath}`);
@@ -87,6 +88,7 @@ function verify(flags) {
 const flags = parseArgs(process.argv.slice(2));
 const command = flags._[0] || 'install';
 if (command === 'install') install(flags);
+else if (command === 'regenerate' || command === 'regen') install(flags, { reset: true, label: 'regenerate' });
 else if (command === 'verify') verify(flags);
 else {
   usage();

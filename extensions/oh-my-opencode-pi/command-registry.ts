@@ -13,6 +13,7 @@ interface CommandRegistryHandlers {
   handlePantheonCouncilCommand: CommandHandler;
   handlePantheonSpecStudioCommand: CommandHandler;
   handlePantheonBootstrapCommand: CommandHandler;
+  handlePantheonRegenerateCommand: CommandHandler;
   handlePantheonAsCommand: CommandHandler;
   handlePantheonAttachCommand: CommandHandler;
   handlePantheonAttachAllCommand: CommandHandler;
@@ -64,6 +65,11 @@ export function registerPantheonNamedCommands(registerCommand: RegisterCommand, 
   registerCommand("pantheon-bootstrap", {
     description: "Scaffold project-local Pantheon config and starter directories",
     handler: handlers.handlePantheonBootstrapCommand,
+  });
+
+  registerCommand("pantheon-regenerate", {
+    description: "Regenerate project-local Pantheon scaffold files, overwriting existing generated files",
+    handler: handlers.handlePantheonRegenerateCommand,
   });
 
   registerCommand("pantheon-as", {

@@ -62,10 +62,19 @@ npx oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
 npx oh-my-opencode-pi verify --cwd /path/to/project
 ```
 
+To regenerate scaffold files after a package update, run:
+
+```bash
+npx oh-my-opencode-pi regenerate --cwd /path/to/project --tmux=yes --skills=yes
+```
+
+`regenerate` overwrites the generated Pantheon scaffold files, including `.pi/oh-my-opencode-pi.jsonc`, so review or back up local customizations first.
+
 If you installed the package globally and the binary is on your `PATH`, the same commands work as:
 
 ```bash
 oh-my-opencode-pi install --cwd /path/to/project --tmux=yes --skills=yes
+oh-my-opencode-pi regenerate --cwd /path/to/project --tmux=yes --skills=yes
 oh-my-opencode-pi verify --cwd /path/to/project
 ```
 
@@ -75,7 +84,8 @@ oh-my-opencode-pi verify --cwd /path/to/project
 |--------|-------------|
 | `--cwd <dir>` | Target project directory |
 | `--global` | Write into the global pi agent directory instead of a project `.pi/` folder |
-| `--reset` | Overwrite generated bootstrap files |
+| `--reset` | Overwrite generated bootstrap files when using `install` |
+| `regenerate` | Command that rewrites generated scaffold files without needing `install --reset` |
 | `--yes` | Reserved for non-interactive automation flows |
 | `--tmux=yes|no` | Enable tmux-based multiplexer integration in the generated config |
 | `--skills=yes|no` | Enable the bundled karpathy-guidelines + cartography skills in the generated config |
@@ -116,6 +126,7 @@ A good first-run flow is:
 5. if you want coding-discipline guardrails immediately, run `/skill:karpathy-guidelines`
 6. if you want repository mapping, run `/skill:cartography`
 6. if you want project-local overrides, run `/pantheon-bootstrap`
+7. if you want to refresh generated scaffold files after an update, run `/pantheon-regenerate`
 
 If you prefer the tool surface instead of slash commands, the top-level orchestrator can call:
 

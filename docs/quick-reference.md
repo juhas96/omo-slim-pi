@@ -62,6 +62,7 @@ Keep these for lower-frequency setup, inspection, and maintainer workflows:
 - `/pantheon-adapters` — inspect the current adapter policy report
 - `/pantheon-adapter-health` — inspect adapter auth/readiness
 - `/pantheon-bootstrap` — scaffold project-local Pantheon files
+- `/pantheon-regenerate` — overwrite generated project-local Pantheon scaffold files after an update
 
 ## Suggested reading order
 

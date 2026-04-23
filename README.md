@@ -353,6 +353,7 @@ For the full option map, presets, council config, adapter policy, and schema gui
 | `/pantheon-council` | Launch a council run interactively |
 | `/pantheon-config` | Show config sources, presets, and warnings |
 | `/pantheon-skills` | Show effective skill guidance |
+| `/pantheon-regenerate` | Refresh generated project-local scaffold files after an update |
 | `/pantheon-adapters` | List adapters and effective policy |
 | `/pantheon-backgrounds` | Inspect recent background tasks |
 | `/pantheon-stats` | Inspect usage and reliability statistics |

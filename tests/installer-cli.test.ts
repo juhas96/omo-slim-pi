@@ -27,3 +27,23 @@ test("installer CLI scaffolds project-local Pantheon files and verify passes", (
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "agents", "README.md")));
   assert.ok(fs.existsSync(path.join(projectDir, ".pi", "prompts", "README.md")));
 });
+
+test("installer CLI regenerate overwrites existing scaffold files", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-installer-regenerate-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  const cliPath = path.resolve("bin/oh-my-opencode-pi.mjs");
+  execFileSync(process.execPath, [cliPath, "install", "--cwd", projectDir, "--yes", "--tmux=no", "--skills=yes"], { encoding: "utf8" });
+
+  const configPath = path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc");
+  fs.writeFileSync(configPath, "{\n  \"agents\": { \"oracle\": { \"model\": \"openai/gpt-5.4\" } }\n}\n");
+
+  const output = execFileSync(process.execPath, [cliPath, "regenerate", "--cwd", projectDir, "--yes", "--tmux=yes", "--skills=yes"], { encoding: "utf8" });
+  const configText = fs.readFileSync(configPath, "utf8");
+
+  assert.match(output, /Pantheon scaffold regenerate complete/);
+  assert.match(configText, /"tmux": true/);
+  assert.match(configText, /Pantheon inherits pi's default provider\/model/);
+  assert.doesNotMatch(configText, /openai\/gpt-5\.4/);
+});

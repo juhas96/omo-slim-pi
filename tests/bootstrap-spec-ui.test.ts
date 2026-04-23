@@ -42,6 +42,23 @@ test("bootstrap tool scaffolds project-local Pantheon files", async () => {
   assert.doesNotMatch(configText, /"reviewer", "model":/);
 });
 
+test("bootstrap tool can force-regenerate project-local Pantheon files", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-bootstrap-force-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(path.join(projectDir, ".pi"), { recursive: true });
+
+  const configPath = path.join(projectDir, ".pi", "oh-my-opencode-pi.jsonc");
+  fs.writeFileSync(configPath, "{\n  \"agents\": { \"oracle\": { \"model\": \"openai/gpt-5.4\" } }\n}\n");
+
+  const tools = registerTools();
+  const bootstrapTool = tools.get("pantheon_bootstrap");
+  await bootstrapTool.execute("call-1", { force: true }, undefined, undefined, { cwd: projectDir });
+
+  const configText = fs.readFileSync(configPath, "utf8");
+  assert.match(configText, /Pantheon inherits pi's default provider\/model/);
+  assert.doesNotMatch(configText, /openai\/gpt-5\.4/);
+});
+
 test("spec studio templates provide richer iterative planning outlines", () => {
   const refactor = buildSpecStudioTemplate("refactor", "Refactor Auth Boundary", { context: "Workspace: demo", focusAreas: "architecture, rollout" });
   assert.match(refactor, /Migration Plan/);

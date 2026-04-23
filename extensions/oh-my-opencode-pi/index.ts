@@ -3218,7 +3218,13 @@ export default function (pi: ExtensionAPI) {
   async function handlePantheonBootstrapCommand(_args: string, ctx: ExtensionContext) {
     const result = bootstrapPantheonProject(ctx.cwd);
     ctx.ui.setEditorText(buildBootstrapGuide(ctx.cwd, result.files));
-    ctx.ui.notify(result.files.length > 0 ? `Bootstrapped Pantheon project files in ${result.rootDir}.` : "Pantheon bootstrap skipped existing files (use the tool with force to overwrite).", "info");
+    ctx.ui.notify(result.files.length > 0 ? `Bootstrapped Pantheon project files in ${result.rootDir}.` : "Pantheon bootstrap skipped existing files (use /pantheon-regenerate or the tool with force to overwrite).", "info");
+  }
+
+  async function handlePantheonRegenerateCommand(_args: string, ctx: ExtensionContext) {
+    const result = bootstrapPantheonProject(ctx.cwd, { force: true });
+    ctx.ui.setEditorText(buildBootstrapGuide(ctx.cwd, result.files));
+    ctx.ui.notify(`Regenerated Pantheon project files in ${result.rootDir}.`, "info");
   }
 
   async function handlePantheonDebugCommand(
@@ -3722,6 +3728,7 @@ export default function (pi: ExtensionAPI) {
     handlePantheonCouncilCommand,
     handlePantheonSpecStudioCommand,
     handlePantheonBootstrapCommand,
+    handlePantheonRegenerateCommand,
     handlePantheonAsCommand,
     handlePantheonAttachCommand,
     handlePantheonAttachAllCommand,
