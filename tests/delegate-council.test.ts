@@ -192,6 +192,72 @@ test("pantheon_delegate re-arms the timeout while the child keeps emitting progr
   }
 });
 
+test("pantheon_delegate suppresses benign stale extension ctx stderr from successful child pi runs", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-stale-stderr-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const fakePiScript = path.join(tempRoot, "fake-pi-stale-stderr.mjs");
+  fs.writeFileSync(fakePiScript, `
+    const stale = "Extension error (/tmp/ext.ts): This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
+    console.error(stale);
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = fakePiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+    const result = await delegateTool.execute("call-stale-stderr", { agent: "fixer", task: "Emit benign stderr" }, undefined, undefined, { cwd: projectDir });
+    assert.equal(result.isError, false);
+    assert.equal(result.details.results[0].stderr, "");
+    assert.doesNotMatch(result.content[0]?.text ?? "", /stale after session replacement/);
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
+test("pantheon_delegate preserves real stderr while suppressing benign stale ctx noise", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-real-stderr-"));
+  const projectDir = path.join(tempRoot, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  const fakePiScript = path.join(tempRoot, "fake-pi-real-stderr.mjs");
+  fs.writeFileSync(fakePiScript, `
+    const stale = "Extension error (/tmp/ext.ts): This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
+    console.error(stale);
+    console.error("real warning");
+    console.log(JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        model: "fake/model",
+        stopReason: "end_turn"
+      }
+    }));
+  `);
+
+  const originalArgv1 = process.argv[1];
+  process.argv[1] = fakePiScript;
+  try {
+    const tools = registerTools();
+    const delegateTool = tools.get("pantheon_delegate");
+    const result = await delegateTool.execute("call-real-stderr", { agent: "fixer", task: "Emit mixed stderr" }, undefined, undefined, { cwd: projectDir });
+    assert.equal(result.isError, false);
+    assert.equal(result.details.results[0].stderr, "real warning\n");
+  } finally {
+    process.argv[1] = originalArgv1;
+  }
+});
+
 test("pantheon_delegate reports failures from the subagent runner", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-delegate-fail-"));
   const projectDir = path.join(tempRoot, "project");

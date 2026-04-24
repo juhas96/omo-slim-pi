@@ -51,6 +51,23 @@ function extractTextFromMessage(message) {
     .trim();
 }
 
+const BENIGN_STALE_EXTENSION_CTX_PREFIX = "Extension error (";
+const BENIGN_STALE_EXTENSION_CTX_MESSAGE = "This extension ctx is stale after session replacement or reload.";
+
+function isBenignStaleExtensionCtxLine(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith(BENIGN_STALE_EXTENSION_CTX_PREFIX)
+    && trimmed.includes(`): ${BENIGN_STALE_EXTENSION_CTX_MESSAGE}`);
+}
+
+function filterBenignSubagentStderr(stderr) {
+  if (!stderr || !stderr.includes(BENIGN_STALE_EXTENSION_CTX_MESSAGE)) return stderr;
+  const hadTrailingNewline = /\r?\n$/.test(stderr);
+  const kept = stderr.split(/\r?\n/).filter((line) => line.length > 0 && !isBenignStaleExtensionCtxLine(line));
+  if (kept.length === 0) return "";
+  return `${kept.join("\n")}${hadTrailingNewline ? "\n" : ""}`;
+}
+
 function isLikelyFinalAssistantMessage(message) {
   if (message?.role !== "assistant") return false;
   if (!extractTextFromMessage(message)) return false;
@@ -197,6 +214,7 @@ async function runAttempt(spec, model) {
     proc.on("close", (code) => {
       clearLingerTimer();
       if (buffer.trim()) processLine(buffer);
+      result.stderr = filterBenignSubagentStderr(result.stderr);
       result.exitCode = code ?? 0;
       if (timedOut && !result.stderr.includes("Subagent aborted (timeout)")) {
         result.stderr += `${result.stderr ? "\n" : ""}Subagent aborted (timeout)`;
@@ -209,6 +227,7 @@ async function runAttempt(spec, model) {
       clearLingerTimer();
       result.exitCode = 1;
       result.stderr += String(error);
+      result.stderr = filterBenignSubagentStderr(result.stderr);
       cleanupTimer();
       log.end();
       resolve(result);

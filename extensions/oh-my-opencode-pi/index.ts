@@ -574,6 +574,23 @@ function extractParsedOutputFromEvent(event: any): { chunks: string[]; streamTex
   return { chunks };
 }
 
+const BENIGN_STALE_EXTENSION_CTX_PREFIX = "Extension error (";
+const BENIGN_STALE_EXTENSION_CTX_MESSAGE = "This extension ctx is stale after session replacement or reload.";
+
+function isBenignStaleExtensionCtxLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith(BENIGN_STALE_EXTENSION_CTX_PREFIX)
+    && trimmed.includes(`): ${BENIGN_STALE_EXTENSION_CTX_MESSAGE}`);
+}
+
+function filterBenignSubagentStderr(stderr: string): string {
+  if (!stderr || !stderr.includes(BENIGN_STALE_EXTENSION_CTX_MESSAGE)) return stderr;
+  const hadTrailingNewline = /\r?\n$/.test(stderr);
+  const kept = stderr.split(/\r?\n/).filter((line) => line.length > 0 && !isBenignStaleExtensionCtxLine(line));
+  if (kept.length === 0) return "";
+  return `${kept.join("\n")}${hadTrailingNewline ? "\n" : ""}`;
+}
+
 function parseSubagentOutputPreview(raw: string): string {
   const lines = raw.split(/\r?\n/);
   const prefix: string[] = [];
@@ -642,7 +659,7 @@ function buildSubagentExpandedLines(entry: { label: string; result: SingleResult
   if (outputLines.length > 0) lines.push(`output: ${outputLines.join(" ⏎ ")}`);
 
   const stderrText = result.debugStderrPath
-    ? readDebugArtifactPreview(result.debugStderrPath, result.stderr || "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })
+    ? filterBenignSubagentStderr(readDebugArtifactPreview(result.debugStderrPath, result.stderr || "", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" }))
     : result.stderr;
   const stderrLines = collectPreviewLines(stderrText || "", Math.max(1, options?.stderrLines ?? 2));
   if (stderrLines.length > 0) lines.push(`stderr: ${stderrLines.join(" ⏎ ")}`);
@@ -776,6 +793,7 @@ function buildSubagentArtifactText(
   options?: { maxBytes?: number; mode?: "head" | "tail" },
 ): string {
   const guide = getPantheonSpecialistGuide(entry.result.agent);
+  const preview = readDebugArtifactPreview(filePath, fallback, options);
   return [
     `Subagent: ${entry.label}`,
     `Agent: ${entry.result.agent}`,
@@ -785,7 +803,7 @@ function buildSubagentArtifactText(
     filePath ? `Path: ${filePath}` : undefined,
     `Preview: ${buildDebugArtifactDescription(filePath, options)}`,
     "",
-    readDebugArtifactPreview(filePath, fallback, options),
+    artifactLabel === "Stderr" ? filterBenignSubagentStderr(preview) || "(no stderr log)" : preview,
   ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
@@ -858,7 +876,7 @@ function buildSubagentDetailText(entry: { label: string; result: SingleResult })
     "",
     "Stderr:",
     result.debugStderrPath
-      ? readDebugArtifactPreview(result.debugStderrPath, result.stderr || "(no stderr log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })
+      ? filterBenignSubagentStderr(readDebugArtifactPreview(result.debugStderrPath, result.stderr || "(no stderr log)", { maxBytes: SUBAGENT_DETAIL_LOG_PREVIEW_BYTES, mode: "tail" })) || "(no stderr log)"
       : (result.stderr || "(no stderr log)"),
   ].filter((line): line is string => typeof line === "string").join("\n");
 }
@@ -1242,6 +1260,7 @@ async function runSingleAgent(
     }
   });
 
+  currentResult.stderr = filterBenignSubagentStderr(currentResult.stderr);
   currentResult.exitCode = exitCode;
   currentResult.finishedAt = Date.now();
   currentResult.durationMs = currentResult.finishedAt - startedAt;
