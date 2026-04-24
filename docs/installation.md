@@ -117,6 +117,15 @@ Important: `verify` checks that the expected Pantheon scaffold files were writte
 
 ## After installation
 
+On the first top-level pi startup after installation, if neither global Pantheon config exists, the extension automatically creates a non-destructive global scaffold under `~/.pi/agent/`:
+
+- `~/.pi/agent/oh-my-opencode-pi.jsonc`
+- `~/.pi/agent/pantheon-adapters/README.md`
+- `~/.pi/agent/agents/README.md`
+- `~/.pi/agent/prompts/README.md`
+
+Existing `oh-my-opencode-pi.jsonc` or `oh-my-opencode-pi.json` files are never overwritten. Use `/pantheon-bootstrap` or the standalone installer when you want project-local scaffolding.
+
 A good first-run flow is:
 
 1. run `/pantheon-config` to inspect active config sources and warnings

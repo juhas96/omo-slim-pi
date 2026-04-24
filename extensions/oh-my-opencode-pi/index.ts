@@ -110,7 +110,7 @@ import {
   type WorkflowState,
   updateWorkflowState,
 } from "./workflow.js";
-import { bootstrapPantheonProject, buildBootstrapGuide, buildSpecStudioTemplate } from "./setup.js";
+import { bootstrapPantheonGlobalConfigIfMissing, bootstrapPantheonProject, buildBootstrapGuide, buildSpecStudioTemplate } from "./setup.js";
 import {
   PantheonOrchestrationRuntime,
   restorePantheonOrchestrationFromEntries,
@@ -2781,6 +2781,15 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (event, ctx) => {
     orchestration.restore(restorePantheonOrchestrationFromEntries(ctx.sessionManager.getEntries() as Array<{ type?: string; customType?: string; data?: unknown }>));
     clearSubagentActivityWidget(ctx, true);
+    let firstRunScaffoldFiles: string[] = [];
+    if (process.env[SUBAGENT_ENV] !== "1") {
+      try {
+        firstRunScaffoldFiles = bootstrapPantheonGlobalConfigIfMissing().files;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(`Pantheon first-run scaffold failed: ${message}`, "warning");
+      }
+    }
     const configResult = loadPantheonConfig(ctx.cwd);
     latestConfig = configResult.config;
     latestWarningCount = configResult.warnings.length;
@@ -2794,6 +2803,12 @@ export default function (pi: ExtensionAPI) {
       if (state.uncheckedTodos.length > 0) {
         ctx.ui.notify(`Pantheon workflow state restored with ${state.uncheckedTodos.length} unchecked todo${state.uncheckedTodos.length === 1 ? "" : "s"}.`, "info");
       }
+    }
+    if (firstRunScaffoldFiles.length > 0) {
+      ctx.ui.notify(
+        `Pantheon first-run scaffold created ${firstRunScaffoldFiles.length} global file${firstRunScaffoldFiles.length === 1 ? "" : "s"} under ${configResult.sources.globalPath ? path.dirname(configResult.sources.globalPath) : getAgentDir()}.`,
+        "info",
+      );
     }
     if (configResult.warnings.length > 0) {
       ctx.ui.setStatus(CONFIG_WARNING_KEY, `oh-my-opencode-pi config warnings: ${configResult.warnings.length}`);

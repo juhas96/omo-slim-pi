@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import { buildPantheonScaffoldConfig, getPantheonScaffoldEntries } from "../../shared/scaffold.mjs";
 
 export interface BootstrapResult {
@@ -11,8 +12,7 @@ export function buildBootstrapConfig(): string {
   return buildPantheonScaffoldConfig({ tmuxEnabled: false, skillsEnabled: true });
 }
 
-export function bootstrapPantheonProject(cwd: string, options?: { force?: boolean }): BootstrapResult {
-  const rootDir = path.join(cwd, ".pi");
+function writePantheonScaffoldEntries(rootDir: string, options?: { force?: boolean }): BootstrapResult {
   const files: string[] = [];
   fs.mkdirSync(rootDir, { recursive: true });
 
@@ -27,6 +27,18 @@ export function bootstrapPantheonProject(cwd: string, options?: { force?: boolea
   }
 
   return { rootDir, files };
+}
+
+export function bootstrapPantheonProject(cwd: string, options?: { force?: boolean }): BootstrapResult {
+  return writePantheonScaffoldEntries(path.join(cwd, ".pi"), options);
+}
+
+export function bootstrapPantheonGlobalConfigIfMissing(options?: { rootDir?: string }): BootstrapResult {
+  const rootDir = options?.rootDir ?? getAgentDir();
+  const configExists = ["oh-my-opencode-pi.jsonc", "oh-my-opencode-pi.json"]
+    .some((fileName) => fs.existsSync(path.join(rootDir, fileName)));
+  if (configExists) return { rootDir, files: [] };
+  return writePantheonScaffoldEntries(rootDir, { force: false });
 }
 
 export function buildBootstrapGuide(cwd: string, createdFiles: string[]): string {

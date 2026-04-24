@@ -847,7 +847,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
       config,
       warnings,
       diagnostics: [],
-      sources: { globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.json"), projectPath: null },
+      sources: { globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.jsonc"), projectPath: null },
       activePresets: [],
       availablePresets: Object.keys(DEFAULT_CONFIG_PRESETS),
     };
@@ -1079,7 +1079,7 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
     warnings,
     diagnostics: [],
     sources: {
-      globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.json"),
+      globalPath: path.join(getAgentDir(), "oh-my-opencode-pi.jsonc"),
       projectPath: null,
     },
     activePresets: [],
@@ -1091,12 +1091,12 @@ export function loadPantheonConfig(cwd: string): PantheonConfigLoadResult {
   const warnings: string[] = [];
   const diagnostics: PantheonConfigDiagnostic[] = [];
   const globalPath = findFirstExistingPath([
-    path.join(getAgentDir(), "oh-my-opencode-pi.json"),
     path.join(getAgentDir(), "oh-my-opencode-pi.jsonc"),
+    path.join(getAgentDir(), "oh-my-opencode-pi.json"),
   ]);
   const projectPath = findNearestProjectPath(cwd, [
-    path.join(".pi", "oh-my-opencode-pi.json"),
     path.join(".pi", "oh-my-opencode-pi.jsonc"),
+    path.join(".pi", "oh-my-opencode-pi.json"),
   ]);
 
   const globalConfig = globalPath ? loadJsoncFile(globalPath, warnings) : {};
@@ -1128,7 +1128,7 @@ export function loadPantheonConfig(cwd: string): PantheonConfigLoadResult {
     ...result.warnings,
     ...mergedDiagnostics.map(formatDiagnostic),
   ].filter((item, index, array) => array.indexOf(item) === index);
-  result.sources.globalPath = globalPath ?? path.join(getAgentDir(), "oh-my-opencode-pi.json");
+  result.sources.globalPath = globalPath ?? path.join(getAgentDir(), "oh-my-opencode-pi.jsonc");
   result.sources.projectPath = projectPath;
   result.activePresets = [...globalResolved.activePresets, ...projectResolved.activePresets].filter((item, index, array) => array.indexOf(item) === index);
   result.availablePresets = Object.keys(allPresetMap).sort();

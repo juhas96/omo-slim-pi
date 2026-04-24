@@ -5,6 +5,60 @@ import * as os from "node:os";
 import * as path from "node:path";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
+test("session_start scaffolds global Pantheon config on first run", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-first-run-"));
+  const projectDir = path.join(tempRoot, "project");
+  const agentDir = path.join(tempRoot, "agent");
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  try {
+    const handlers = new Map<string, any>();
+    const fakePi = {
+      on(event: string, handler: any) {
+        handlers.set(event, handler);
+      },
+      registerTool() {},
+      registerCommand() {},
+      registerMessageRenderer() {},
+      sendMessage() {},
+      sendUserMessage() {},
+      appendEntry() {},
+    };
+    extension(fakePi as never);
+
+    const notifications: Array<{ text: string; level: string }> = [];
+    const ctx = {
+      cwd: projectDir,
+      hasUI: true,
+      model: { provider: "openai" },
+      sessionManager: { getEntries: () => [] },
+      ui: {
+        notify(text: string, level: string) {
+          notifications.push({ text, level });
+        },
+        setStatus() {},
+        setWidget() {},
+        setEditorText() {},
+        theme: {},
+      },
+    };
+
+    await handlers.get("session_start")({ reason: "startup" }, ctx as never);
+    await handlers.get("session_shutdown")({ reason: "quit" }, ctx as never);
+
+    const configPath = path.join(agentDir, "oh-my-opencode-pi.jsonc");
+    assert.ok(fs.existsSync(configPath));
+    assert.ok(fs.existsSync(path.join(agentDir, "pantheon-adapters", "README.md")));
+    assert.match(fs.readFileSync(configPath, "utf8"), /"extends": \["durable"\]/);
+    assert.ok(notifications.some((item) => item.level === "info" && /first-run scaffold created/i.test(item.text)));
+  } finally {
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+  }
+});
+
 test("commands, tools, and prompt hooks stay inert when Pantheon is disabled", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omo-disabled-"));
   const projectDir = path.join(tempRoot, "project");

@@ -13,6 +13,8 @@ Complete reference for `oh-my-opencode-pi` configuration.
 
 > If both `.jsonc` and `.json` exist in the same location, `.jsonc` is preferred.
 
+On first top-level pi startup after installation, if neither global config file exists, Pantheon automatically creates a default global scaffold at `~/.pi/agent/oh-my-opencode-pi.jsonc` plus companion `agents/`, `prompts/`, and `pantheon-adapters/` README placeholders. This bootstrap is non-destructive: existing `.jsonc` or `.json` config files are left untouched.
+
 ## Merge order
 
 Pantheon resolves config in this order:
