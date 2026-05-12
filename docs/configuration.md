@@ -239,6 +239,26 @@ See [council.md](council.md) for usage guidance.
 
 `fallback.finalMessageGraceMs` controls how long Pantheon waits after a clear final assistant response before terminating a lingering child process. Increase it if a provider needs more teardown time; decrease it if foreground handoff still feels sluggish.
 
+### Agent View
+
+- `agentView.enabled`
+- `agentView.storage.projectArtifactDir`
+- `agentView.storage.userArtifactDir`
+- `agentView.supervisor.scope`
+- `agentView.supervisor.socketDir`
+- `agentView.supervisor.maxConcurrentRuns`
+- `agentView.supervisor.maxConcurrentWriteRuns`
+- `agentView.terminal.backend`
+- `agentView.terminal.degradedMode`
+- `agentView.terminal.rawPtyRecording`
+- `agentView.policy.requireWriteConfirmation`
+- `agentView.policy.maxNestingDepth`
+- `agentView.policy.loadFullExtensionInRuns`
+- `agentView.summary.model`
+- `agentView.summary.runningThrottleMs`
+
+Agent View is the public Run/Supervisor orchestration surface. Its summary model is dedicated to row summaries and is separate from Run models. Write-capable Runs require confirmation by default.
+
 ### Delegation / workflow
 
 - `delegation.maxDepth`
@@ -345,4 +365,5 @@ See also:
 - [provider-configurations.md](provider-configurations.md)
 - [mcps.md](mcps.md)
 - [skills.md](skills.md)
+- [agent-view.md](agent-view.md)
 - [workflows.md](workflows.md)

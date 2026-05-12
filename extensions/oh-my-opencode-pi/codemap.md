@@ -10,7 +10,8 @@ This is where the package turns prompts and configuration into actual pi command
 
 | Path | Responsibility |
 |------|----------------|
-| `index.ts` | Main extension entrypoint. Registers Pantheon tools and commands, attaches hook behavior, coordinates delegation/council/background flows, and renders runtime status. |
+| `index.ts` | Main extension entrypoint. Registers Agent View tools and commands, attaches hook behavior, coordinates runtime surfaces, and renders status. |
+| `agent-view.ts` | Agent View Run, Run Group, project registration, policy, worktree, TerminalBackend, sidecar, summary, and migration model. |
 | `config.ts` | Loads global and project config, resolves presets, validates option shapes, and computes agent skill/adapter policy. |
 | `agents.ts` | Discovers bundled, user, and project-local agents and applies prompt/model/tool overrides. |
 | `specialists.ts` | Pantheon specialist copy and metadata used for launcher descriptions, inspection reports, and specialist rationale surfaces. |
@@ -58,13 +59,13 @@ External research is controlled through adapter policy resolution rather than as
 
 ## Flow
 
-### Delegation / council
+### Agent View orchestration
 
-1. `index.ts` receives a tool or command request
-2. config and agent policy are resolved
-3. debug trace context is initialized
-4. subagent runs are launched directly or in parallel
-5. outputs are summarized back into pi tool results
+1. `index.ts` receives an Agent View tool or command request
+2. config, Specialist, project routing, and launch policy are resolved
+3. Agent View creates durable Runs or Run Groups with event/result artifacts
+4. worktree, TerminalBackend, sidecar, summary, retention, and grouping helpers update Run state
+5. outputs are surfaced through Agent View UI and `agent_view_*` tool results
 
 ### Background work
 

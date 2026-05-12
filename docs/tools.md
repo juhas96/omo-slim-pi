@@ -2,6 +2,25 @@
 
 Built-in tools available through the Pantheon pi port beyond the standard `read`, `edit`, `write`, and `bash` workflow.
 
+## Agent View orchestration
+
+Agent View is the public orchestration tool namespace:
+
+- `agent_view_launch`
+- `agent_view_launch_group`
+- `agent_view_list`
+- `agent_view_status`
+- `agent_view_reply`
+- `agent_view_stop`
+- `agent_view_delete`
+- `agent_view_result`
+- `agent_view_diff`
+- `agent_view_apply`
+- `agent_view_register`
+- `agent_view_doctor`
+
+Attach and cleanup are command-only flows. Legacy `pantheon_delegate`, `pantheon_council`, and `pantheon_background*` are replaced rather than preserved as public aliases.
+
 ## Delegate and council
 
 - `pantheon_delegate` — run one specialist, multiple specialists in parallel, or a specialist chain

@@ -29,7 +29,7 @@ The repository packages:
 
 | Path | Responsibility |
 |------|----------------|
-| [`extensions/oh-my-opencode-pi/`](extensions/oh-my-opencode-pi/codemap.md) | Core extension runtime: config loading, delegation, council, background jobs, adapters, LSP/AST/format tools, UI, stats, workflow state |
+| [`extensions/oh-my-opencode-pi/`](extensions/oh-my-opencode-pi/codemap.md) | Core extension runtime: Agent View Run/Supervisor model, config loading, adapters, LSP/AST/format tools, UI, stats, workflow state |
 | `agents/` | Bundled orchestrator/specialist prompt definitions |
 | `prompts/` | Slash-prompt templates like `implement`, `scout-and-plan`, and `ask-council` |
 | `skills/` | Bundled prompt skills, including `karpathy-guidelines` for coding discipline and `cartography` for repo mapping |
@@ -39,7 +39,7 @@ The repository packages:
 
 ## Architecture notes
 
-- The extension is intentionally centralized in `extensions/oh-my-opencode-pi/index.ts`, with focused helper modules for config, specialist metadata/copy, background tasks, debug traces, workflow state, UI rendering, and code tools.
+- The extension is intentionally centralized in `extensions/oh-my-opencode-pi/index.ts`, with focused helper modules for Agent View Run state, config, specialist metadata/copy, legacy background cleanup, debug traces, workflow state, UI rendering, and code tools.
 - Config is deep-merged from global and project-local JSON/JSONC files, then sanitized into a typed runtime config.
 - Background work is persisted to task artifacts on disk and can optionally surface through tmux panes.
 - Research is adapter-based rather than OpenCode-MCP-based.
@@ -51,8 +51,8 @@ The repository packages:
 1. pi loads the extension from `package.json`
 2. `index.ts` resolves config, agent registry, and runtime hooks
 3. top-level sessions receive orchestrator guidance
-4. the orchestrator uses delegate/council/background tools as needed
-5. helper modules persist workflow state, debug traces, background logs, and statistics
+4. the orchestrator uses Agent View Run and Run Group tools for specialist orchestration
+5. helper modules persist Agent View artifacts, workflow state, debug traces, legacy background logs, and statistics
 6. tests validate each major surface independently
 
 ## Working notes for future agents

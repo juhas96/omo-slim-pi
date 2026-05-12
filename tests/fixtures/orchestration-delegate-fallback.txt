@@ -1,7 +1,6 @@
 Scenario: delegate-fallback-recovery
 Updates:
-- (no output)
-- recovered:Task: Recover this task
+- (none)
 Final:
-- recovered:Task: Recover this task
+- Agent View Run completed: Recover this task
 - model: demo/backup

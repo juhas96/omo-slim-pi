@@ -265,6 +265,59 @@
         "enabled": { "type": "boolean", "default": true },
         "logDir": { "type": "string", "default": ".oh-my-opencode-pi-debug" }
       }
+    },
+    "agentView": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agent View configuration for Supervisor-backed Runs, storage, terminal attach behavior, and safety policy.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "projectArtifactDir": { "type": "string", "default": ".pi/agent-view" },
+            "userArtifactDir": { "type": "string", "default": "agent-view" }
+          }
+        },
+        "supervisor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "scope": { "type": "string", "enum": ["project", "user"], "default": "project" },
+            "socketDir": { "type": "string", "default": "agent-view/sockets" },
+            "maxConcurrentRuns": { "type": "number", "default": 2 },
+            "maxConcurrentWriteRuns": { "type": "number", "default": 1 }
+          }
+        },
+        "terminal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "backend": { "type": "string", "enum": ["node-pty", "stdio"], "default": "node-pty" },
+            "degradedMode": { "type": "string", "enum": ["detail-pane", "disabled"], "default": "detail-pane" },
+            "rawPtyRecording": { "type": "boolean", "default": false }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requireWriteConfirmation": { "type": "boolean", "default": true },
+            "maxNestingDepth": { "type": "number", "default": 1 },
+            "loadFullExtensionInRuns": { "type": "boolean", "default": false }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string", "description": "Dedicated Agent View summary model, separate from Run models." },
+            "runningThrottleMs": { "type": "number", "default": 5000 }
+          }
+        }
+      }
     }
   },
   "$defs": {

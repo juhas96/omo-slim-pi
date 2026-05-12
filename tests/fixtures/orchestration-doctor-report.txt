@@ -17,12 +17,22 @@ tmux available: <detected>
 inside tmux: <detected>
 Known background tasks: 0
 
+Agent View:
+- Config: enabled
+- Storage: project=<PROJECT_DIR>/.pi/agent-view; user=<AGENT_DIR>/agent-view
+- Socket: <AGENT_DIR>/agent-view/sockets/supervisor.sock
+- Supervisor: available on demand
+- PTY/backend: node-pty
+- Degraded mode: detail-pane
+
 Checks:
 - Config: error
 - Adapters: warning
 - Multiplexer: warning
 - Background storage: warning
 - Debug artifacts: ok
+- Agent View Supervisor: ok
+- Agent View PTY/backend: ok
 
 Config diagnostics:
 - [warning] config.mystery (<PROJECT_DIR>/.pi/oh-my-opencode-pi.jsonc) — Unknown config key; it will be ignored by Pantheon.

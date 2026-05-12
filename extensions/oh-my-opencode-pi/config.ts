@@ -137,6 +137,34 @@ export interface PantheonConfig {
     enabled?: boolean;
     logDir?: string;
   };
+  agentView?: {
+    enabled?: boolean;
+    storage?: {
+      projectArtifactDir?: string;
+      userArtifactDir?: string;
+    };
+    supervisor?: {
+      enabled?: boolean;
+      scope?: "project" | "user";
+      socketDir?: string;
+      maxConcurrentRuns?: number;
+      maxConcurrentWriteRuns?: number;
+    };
+    terminal?: {
+      backend?: "node-pty" | "stdio";
+      degradedMode?: "detail-pane" | "disabled";
+      rawPtyRecording?: boolean;
+    };
+    policy?: {
+      requireWriteConfirmation?: boolean;
+      maxNestingDepth?: number;
+      loadFullExtensionInRuns?: boolean;
+    };
+    summary?: {
+      model?: string;
+      runningThrottleMs?: number;
+    };
+  };
 }
 
 export interface PantheonConfigDiagnostic {
@@ -191,6 +219,7 @@ const TOP_LEVEL_CONFIG_KEYS = new Set([
   "workflow",
   "ui",
   "debug",
+  "agentView",
 ]);
 
 const AGENT_OVERRIDE_KEYS = new Set([
@@ -225,6 +254,12 @@ const AUTO_CONTINUE_KEYS = new Set(["enabled", "cooldownMs", "maxContinuations",
 const WORKFLOW_KEYS = new Set(["injectHints", "backgroundAwareness", "todoThreshold", "persistTodos", "stateFile", "phaseReminders", "postFileToolNudges", "delegateRetryGuidance"]);
 const UI_KEYS = new Set(["dashboardWidget", "maxTodos", "maxBackgroundTasks"]);
 const DEBUG_KEYS = new Set(["enabled", "logDir"]);
+const AGENT_VIEW_KEYS = new Set(["enabled", "storage", "supervisor", "terminal", "policy", "summary"]);
+const AGENT_VIEW_STORAGE_KEYS = new Set(["projectArtifactDir", "userArtifactDir"]);
+const AGENT_VIEW_SUPERVISOR_KEYS = new Set(["enabled", "scope", "socketDir", "maxConcurrentRuns", "maxConcurrentWriteRuns"]);
+const AGENT_VIEW_TERMINAL_KEYS = new Set(["backend", "degradedMode", "rawPtyRecording"]);
+const AGENT_VIEW_POLICY_KEYS = new Set(["requireWriteConfirmation", "maxNestingDepth", "loadFullExtensionInRuns"]);
+const AGENT_VIEW_SUMMARY_KEYS = new Set(["model", "runningThrottleMs"]);
 
 const DEFAULT_COUNCIL_PRESET: CouncilPresetConfig = {
   councillors: [{ name: "alpha" }, { name: "beta" }, { name: "gamma" }],
@@ -556,6 +591,22 @@ function lintConfigFragment(raw: RawObject, diagnostics: PantheonConfigDiagnosti
   if (isObject(raw.workflow)) lintUnknownKeys(raw.workflow, WORKFLOW_KEYS, diagnostics, source, joinConfigPath(scope, "workflow"));
   if (isObject(raw.ui)) lintUnknownKeys(raw.ui, UI_KEYS, diagnostics, source, joinConfigPath(scope, "ui"));
   if (isObject(raw.debug)) lintUnknownKeys(raw.debug, DEBUG_KEYS, diagnostics, source, joinConfigPath(scope, "debug"));
+  if (isObject(raw.agentView)) {
+    const agentViewPath = joinConfigPath(scope, "agentView");
+    lintUnknownKeys(raw.agentView, AGENT_VIEW_KEYS, diagnostics, source, agentViewPath);
+    if (isObject(raw.agentView.storage)) lintUnknownKeys(raw.agentView.storage, AGENT_VIEW_STORAGE_KEYS, diagnostics, source, `${agentViewPath}.storage`);
+    if (isObject(raw.agentView.supervisor)) {
+      lintUnknownKeys(raw.agentView.supervisor, AGENT_VIEW_SUPERVISOR_KEYS, diagnostics, source, `${agentViewPath}.supervisor`);
+      lintEnumValue(raw.agentView.supervisor.scope, ["project", "user"], diagnostics, source, `${agentViewPath}.supervisor.scope`);
+    }
+    if (isObject(raw.agentView.terminal)) {
+      lintUnknownKeys(raw.agentView.terminal, AGENT_VIEW_TERMINAL_KEYS, diagnostics, source, `${agentViewPath}.terminal`);
+      lintEnumValue(raw.agentView.terminal.backend, ["node-pty", "stdio"], diagnostics, source, `${agentViewPath}.terminal.backend`);
+      lintEnumValue(raw.agentView.terminal.degradedMode, ["detail-pane", "disabled"], diagnostics, source, `${agentViewPath}.terminal.degradedMode`);
+    }
+    if (isObject(raw.agentView.policy)) lintUnknownKeys(raw.agentView.policy, AGENT_VIEW_POLICY_KEYS, diagnostics, source, `${agentViewPath}.policy`);
+    if (isObject(raw.agentView.summary)) lintUnknownKeys(raw.agentView.summary, AGENT_VIEW_SUMMARY_KEYS, diagnostics, source, `${agentViewPath}.summary`);
+  }
 
   if (isObject(raw.multiplexer)) {
     const multiplexerPath = joinConfigPath(scope, "multiplexer");
@@ -834,6 +885,34 @@ function getDefaultConfig(): PantheonConfig {
       enabled: true,
       logDir: ".oh-my-opencode-pi-debug",
     },
+    agentView: {
+      enabled: true,
+      storage: {
+        projectArtifactDir: ".pi/agent-view",
+        userArtifactDir: "agent-view",
+      },
+      supervisor: {
+        enabled: true,
+        scope: "project",
+        socketDir: "agent-view/sockets",
+        maxConcurrentRuns: 2,
+        maxConcurrentWriteRuns: 1,
+      },
+      terminal: {
+        backend: "node-pty",
+        degradedMode: "detail-pane",
+        rawPtyRecording: false,
+      },
+      policy: {
+        requireWriteConfirmation: true,
+        maxNestingDepth: 1,
+        loadFullExtensionInRuns: false,
+      },
+      summary: {
+        model: undefined,
+        runningThrottleMs: 5000,
+      },
+    },
   };
 }
 
@@ -1032,6 +1111,43 @@ export function validatePantheonConfig(input: unknown): PantheonConfigLoadResult
   if (isObject(input.debug)) {
     if (typeof input.debug.enabled === "boolean") config.debug!.enabled = input.debug.enabled;
     if (isNonEmptyString(input.debug.logDir)) config.debug!.logDir = input.debug.logDir.trim();
+  }
+
+  if (isObject(input.agentView)) {
+    if (typeof input.agentView.enabled === "boolean") config.agentView!.enabled = input.agentView.enabled;
+    if (isObject(input.agentView.storage)) {
+      if (isNonEmptyString(input.agentView.storage.projectArtifactDir)) config.agentView!.storage!.projectArtifactDir = input.agentView.storage.projectArtifactDir.trim();
+      if (isNonEmptyString(input.agentView.storage.userArtifactDir)) config.agentView!.storage!.userArtifactDir = input.agentView.storage.userArtifactDir.trim();
+    }
+    if (isObject(input.agentView.supervisor)) {
+      if (typeof input.agentView.supervisor.enabled === "boolean") config.agentView!.supervisor!.enabled = input.agentView.supervisor.enabled;
+      if (input.agentView.supervisor.scope === "project" || input.agentView.supervisor.scope === "user") config.agentView!.supervisor!.scope = input.agentView.supervisor.scope;
+      if (isNonEmptyString(input.agentView.supervisor.socketDir)) config.agentView!.supervisor!.socketDir = input.agentView.supervisor.socketDir.trim();
+      if (typeof input.agentView.supervisor.maxConcurrentRuns === "number" && Number.isFinite(input.agentView.supervisor.maxConcurrentRuns) && input.agentView.supervisor.maxConcurrentRuns >= 1) {
+        config.agentView!.supervisor!.maxConcurrentRuns = Math.floor(input.agentView.supervisor.maxConcurrentRuns);
+      }
+      if (typeof input.agentView.supervisor.maxConcurrentWriteRuns === "number" && Number.isFinite(input.agentView.supervisor.maxConcurrentWriteRuns) && input.agentView.supervisor.maxConcurrentWriteRuns >= 1) {
+        config.agentView!.supervisor!.maxConcurrentWriteRuns = Math.floor(input.agentView.supervisor.maxConcurrentWriteRuns);
+      }
+    }
+    if (isObject(input.agentView.terminal)) {
+      if (input.agentView.terminal.backend === "node-pty" || input.agentView.terminal.backend === "stdio") config.agentView!.terminal!.backend = input.agentView.terminal.backend;
+      if (input.agentView.terminal.degradedMode === "detail-pane" || input.agentView.terminal.degradedMode === "disabled") config.agentView!.terminal!.degradedMode = input.agentView.terminal.degradedMode;
+      if (typeof input.agentView.terminal.rawPtyRecording === "boolean") config.agentView!.terminal!.rawPtyRecording = input.agentView.terminal.rawPtyRecording;
+    }
+    if (isObject(input.agentView.policy)) {
+      if (typeof input.agentView.policy.requireWriteConfirmation === "boolean") config.agentView!.policy!.requireWriteConfirmation = input.agentView.policy.requireWriteConfirmation;
+      if (typeof input.agentView.policy.maxNestingDepth === "number" && Number.isFinite(input.agentView.policy.maxNestingDepth) && input.agentView.policy.maxNestingDepth >= 0) {
+        config.agentView!.policy!.maxNestingDepth = Math.floor(input.agentView.policy.maxNestingDepth);
+      }
+      if (typeof input.agentView.policy.loadFullExtensionInRuns === "boolean") config.agentView!.policy!.loadFullExtensionInRuns = input.agentView.policy.loadFullExtensionInRuns;
+    }
+    if (isObject(input.agentView.summary)) {
+      if (isNonEmptyString(input.agentView.summary.model)) config.agentView!.summary!.model = input.agentView.summary.model.trim();
+      if (typeof input.agentView.summary.runningThrottleMs === "number" && Number.isFinite(input.agentView.summary.runningThrottleMs) && input.agentView.summary.runningThrottleMs >= 0) {
+        config.agentView!.summary!.runningThrottleMs = Math.floor(input.agentView.summary.runningThrottleMs);
+      }
+    }
   }
 
   if (input.council !== undefined) {

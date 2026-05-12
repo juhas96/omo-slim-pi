@@ -113,6 +113,7 @@ Pantheon uses a few consistent surfaces:
 - [Installation Guide](docs/installation.md)
 - [Provider Configurations](docs/provider-configurations.md)
 - [Configuration Reference](docs/configuration.md)
+- [Agent View](docs/agent-view.md)
 - [Quick Reference](docs/quick-reference.md)
 
 ---
@@ -226,6 +227,7 @@ Bundled agents:
 | Doc | Contents |
 |-----|----------|
 | [Configuration](docs/configuration.md) | Config files, merge order, presets, overrides, schema usage |
+| [Agent View](docs/agent-view.md) | Run lifecycle, Run Groups, project registration, policies, migration notes |
 | [Skills](docs/skills.md) | Bundled karpathy-guidelines + cartography skills, policy controls, setup hints |
 | [MCPs / Adapters](docs/mcps.md) | Pi-native adapter system that fills the role upstream MCP docs cover |
 | [Tools](docs/tools.md) | Background tasks, LSP, AST-grep, formatting, patch rescue, observability |
@@ -363,6 +365,12 @@ For the full option map, presets, council config, adapter policy, and schema gui
 For the full command list, see [`docs/quick-reference.md`](docs/quick-reference.md) and [`docs/tools.md`](docs/tools.md).
 
 ## 🧰 Core tool surface
+
+### Agent View orchestration
+
+Agent View tools are the public orchestration surface: `agent_view_launch`, `agent_view_launch_group`, `agent_view_list`, `agent_view_status`, `agent_view_reply`, `agent_view_stop`, `agent_view_delete`, `agent_view_result`, `agent_view_diff`, `agent_view_apply`, `agent_view_register`, and `agent_view_doctor`.
+
+Legacy public `pantheon_delegate`, `pantheon_council`, and `pantheon_background*` tool aliases are replaced by Agent View. See [`docs/agent-view.md`](docs/agent-view.md).
 
 ### Delegation and consensus
 

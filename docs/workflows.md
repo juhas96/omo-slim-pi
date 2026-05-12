@@ -2,6 +2,8 @@
 
 This guide explains how to choose the right Pantheon workflow, where results appear, and how to recover when something goes wrong.
 
+Agent View is now the public orchestration workflow: use `/agents` or `/pantheon-agent-view` for the UI, and `agent_view_*` tools for Run and Run Group control. See [agent-view.md](agent-view.md) for Run lifecycle and migration details.
+
 ## Start from the user intent
 
 ### I want to investigate or implement something bounded
@@ -189,6 +191,7 @@ Preferred order in most cases:
 4. use `/pantheon-result` when it finishes
 
 See also:
+- [agent-view.md](agent-view.md)
 - [tools.md](tools.md)
 - [evals.md](evals.md)
 - [mcps.md](mcps.md)

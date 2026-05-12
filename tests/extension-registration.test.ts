@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import extension from "../extensions/oh-my-opencode-pi/index.ts";
 
-test("extension registers delegate, council, background, orchestration, and adapter tools", () => {
+test("extension registers Agent View, code, orchestration diagnostics, and adapter tools without legacy public orchestration aliases", () => {
   const tools: string[] = [];
   const commands: string[] = [];
   const handlers: string[] = [];
@@ -33,10 +33,15 @@ test("extension registers delegate, council, background, orchestration, and adap
 
   extension(fakePi as never);
 
-  assert.ok(tools.includes("pantheon_delegate"));
-  assert.ok(tools.includes("pantheon_council"));
-  assert.ok(tools.includes("pantheon_background"));
-  assert.ok(tools.includes("pantheon_background_watch"));
+  assert.ok(tools.includes("agent_view_launch"));
+  assert.ok(tools.includes("agent_view_launch_group"));
+  assert.ok(tools.includes("agent_view_list"));
+  assert.ok(tools.includes("agent_view_status"));
+  assert.ok(tools.includes("agent_view_doctor"));
+  assert.ok(!tools.includes("pantheon_delegate"));
+  assert.ok(!tools.includes("pantheon_council"));
+  assert.ok(!tools.includes("pantheon_background"));
+  assert.ok(!tools.includes("pantheon_background_watch"));
   assert.ok(tools.includes("pantheon_lsp_goto_definition"));
   assert.ok(tools.includes("pantheon_lsp_hover"));
   assert.ok(tools.includes("pantheon_lsp_symbols"));
@@ -58,6 +63,8 @@ test("extension registers delegate, council, background, orchestration, and adap
   assert.ok(tools.includes("pantheon_webfetch"));
   assert.ok(commands.includes("review"));
   assert.ok(commands.includes("pantheon"));
+  assert.ok(commands.includes("pantheon-agent-view"));
+  assert.ok(commands.includes("agents"));
   assert.ok(commands.includes("pantheon-config"));
   assert.ok(commands.includes("pantheon-skills"));
   assert.ok(!commands.includes("pantheon-repo-map"));

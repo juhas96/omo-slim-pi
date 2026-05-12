@@ -13,6 +13,11 @@ import {
   loadOrchestratorPrompt,
 } from "./agents.js";
 import {
+  buildEmptyAgentViewReport,
+  launchReadOnlyAgentViewRun,
+  registerAgentViewTools,
+} from "./agent-view.js";
+import {
   type CouncilMemberConfig,
   type PantheonConfig,
   findNearestProjectPath,
@@ -2699,6 +2704,7 @@ export default function (pi: ExtensionAPI) {
   const orchestration = new PantheonOrchestrationRuntime();
   const commandsAllowedWhenDisabled = new Set(["pantheon-config", "pantheon-bootstrap"]);
   const toolsAllowedWhenDisabled = new Set(["pantheon_bootstrap"]);
+  const legacyPublicOrchestrationTools = new Set(["pantheon_delegate", "pantheon_council"]);
 
   const isPantheonEnabled = (config: PantheonConfig | undefined) => config?.enabled !== false;
 
@@ -2737,6 +2743,7 @@ export default function (pi: ExtensionAPI) {
 
   const baseRegisterTool = pi.registerTool.bind(pi);
   (pi as { registerTool: typeof pi.registerTool }).registerTool = ((tool: { name: string; execute?: (...args: any[]) => unknown }) => {
+    if (legacyPublicOrchestrationTools.has(tool?.name) || tool?.name?.startsWith("pantheon_background")) return;
     if (typeof tool?.execute !== "function") return baseRegisterTool(tool as never);
     return baseRegisterTool({
       ...tool,
@@ -3084,6 +3091,31 @@ export default function (pi: ExtensionAPI) {
     const { agents } = discoverPantheonAgents(ctx.cwd, true);
     const report = buildPantheonQuickHelpReport(agents);
     await showPantheonReportModal(ctx, "Which specialist should I use?", "Pantheon specialist quick help", report);
+  }
+
+  async function handleAgentViewCommand(args: string, ctx: ExtensionContext) {
+    const config = loadPantheonConfig(ctx.cwd).config;
+    const raw = args.trim();
+    let task = raw;
+    let specialist = "explorer";
+    let model: string | undefined;
+    if (raw.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(raw) as { task?: string; specialist?: string; model?: string; temporarySpecialist?: { name?: string; model?: string } };
+        task = parsed.task?.trim() ?? "";
+        specialist = parsed.temporarySpecialist?.name?.trim() || parsed.specialist?.trim() || specialist;
+        model = parsed.model?.trim() || parsed.temporarySpecialist?.model?.trim() || undefined;
+      } catch {
+        task = raw;
+      }
+    }
+    if (task) launchReadOnlyAgentViewRun(ctx.cwd, config, { task, specialist, model });
+    const report = buildEmptyAgentViewReport(ctx.cwd, config);
+    presentPantheonCommandEditorOutput("/pantheon-agent-view", report, ctx, {
+      summary: "Agent View · No Runs",
+      status: "success",
+      modes: ["widget-summary", "editor-report"],
+    });
   }
 
   async function handlePantheonAgentsCommand(_args: string, ctx: ExtensionContext) {
@@ -3755,6 +3787,16 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setEditorText(buildSubagentDetailText(entry));
     ctx.ui.notify(`Loaded subagent details for ${entry.label}.`, "info");
   }
+
+  pi.registerCommand("pantheon-agent-view", {
+    description: "Open Agent View to dispatch, monitor, inspect, and manage Runs",
+    handler: handleAgentViewCommand,
+  });
+
+  pi.registerCommand("agents", {
+    description: "Open Agent View",
+    handler: handleAgentViewCommand,
+  });
 
   registerPantheonNamedCommands(pi.registerCommand.bind(pi), {
     handleReviewCommand,
@@ -5231,6 +5273,8 @@ export default function (pi: ExtensionAPI) {
       };
   };
 
+
+  registerAgentViewTools(pi.registerTool.bind(pi));
 
   pi.registerTool({
     name: "pantheon_delegate",

@@ -107,7 +107,7 @@ test("pantheon-doctor surfaces provider mismatch warnings", async () => {
 
     await doctorCommand.handler("", {
       cwd: projectDir,
-      hasUI: true,
+      hasUI: false,
       ui: {
         notify() {},
         setEditorText(text: string) {

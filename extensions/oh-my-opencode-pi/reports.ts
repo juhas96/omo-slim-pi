@@ -1,4 +1,5 @@
 import type { PantheonConfigDiagnostic, PantheonConfigLoadResult } from "./config.js";
+import { buildAgentViewDoctorSection } from "./agent-view.js";
 import type { PantheonProviderAudit } from "./doctor.js";
 
 function formatList(items: string[] | undefined): string {
@@ -101,12 +102,16 @@ export function buildDoctorReport(args: {
     `inside tmux: ${args.inTmux ? "yes" : "no"}`,
     `Known background tasks: ${args.taskCount}`,
     "",
+    ...buildAgentViewDoctorSection({ cwd: args.cwd, config: args.config }),
+    "",
     "Checks:",
     `- Config: ${errors.length > 0 ? "error" : warnings.length > 0 ? "warning" : "ok"}`,
     `- Adapters: ${unhealthyAdapters.some((item) => item.status === "error") ? "error" : unhealthyAdapters.length > 0 ? "warning" : "ok"}`,
     `- Multiplexer: ${args.tmuxAvailable ? args.inTmux ? "ok" : "warning" : "warning"}`,
     `- Background storage: ${args.backgroundDirExists ? "ok" : "warning"}`,
     `- Debug artifacts: ${args.debugDirExists ? "ok" : "warning"}`,
+    `- Agent View Supervisor: ${args.config.config.agentView?.supervisor?.enabled === false ? "warning" : "ok"}`,
+    `- Agent View PTY/backend: ${args.config.config.agentView?.terminal?.degradedMode === "disabled" ? "warning" : "ok"}`,
     ...(showProviderAudit ? [`- Provider models: ${providerWarnings.length > 0 ? "warning" : "ok"}`] : []),
     ...(showProviderAudit ? [
       "",
